@@ -1,0 +1,7 @@
+bridge3 {
+  pkg11 "bridge_input" some=stuff
+  pkg12 "bridge_input" check=#true
+  pkg13 "bridge_input" file="some/path" count=10
+  pkg14 "bridge_input" some=stuff
+  pkg15 "bridge_input" some=stuff
+}

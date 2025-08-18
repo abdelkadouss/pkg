@@ -1,1 +1,8 @@
+# Rust
 /target
+
+# Os
+.DS_Store
+
+# D2
+/docs/.d2
