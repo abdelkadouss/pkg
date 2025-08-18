@@ -28,14 +28,13 @@ pub struct PkgDeclaration {
 #[derive(Debug)]
 pub struct Bridge {
     pub name: String,
-    // pub path: PathBuf,
+    pub pkgs: Vec<PkgDeclaration>,
 }
 
 #[derive(Debug)]
 pub struct Input {
     pub path: PathBuf,
     pub bridges: Vec<Bridge>,
-    pub pkgs: Vec<PkgDeclaration>,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -126,11 +125,17 @@ fn parse_attributes(node: &KdlNode) -> Result<HashMap<String, AttributeValue>, I
     Ok(attributes)
 }
 
-fn parse_pkg(kdl_docs: &[KdlDocument]) -> Result<Vec<PkgDeclaration>> {
-    let mut pkgs = Vec::new();
+fn parse_bridges(kdl_docs: &[KdlDocument]) -> Result<Vec<Bridge>> {
+    let mut bridges = Vec::<Bridge>::new();
 
     for doc in kdl_docs {
         for bridge_node in doc.nodes() {
+            let bridge_name = bridge_node.name().to_string();
+            let mut bridge = Bridge {
+                name: bridge_name.clone(),
+                pkgs: Vec::new(),
+            };
+
             let children = bridge_node.children().ok_or(InputError::MissingField)?;
 
             for pkg_decl_node in children.nodes() {
@@ -149,35 +154,22 @@ fn parse_pkg(kdl_docs: &[KdlDocument]) -> Result<Vec<PkgDeclaration>> {
                     attributes: parse_attributes(pkg_decl_node)?,
                 };
 
-                if pkgs
-                    .iter()
-                    .any(|p: &PkgDeclaration| p.name == pkg_decl.name)
-                {
+                if bridges.iter().any(|b: &Bridge| {
+                    b.pkgs
+                        .iter()
+                        .any(|p: &PkgDeclaration| p.name == pkg_decl.name)
+                }) {
                     return Err(Report::new(InputError::DuplicatePkgDeclaration(
                         pkg_decl.name.clone(),
                     )));
                 }
 
-                pkgs.push(pkg_decl);
+                bridge.pkgs.push(pkg_decl);
             }
-        }
-    }
-
-    Ok(pkgs)
-}
-
-fn parse_bridges(kdl_docs: &[KdlDocument]) -> Result<Vec<Bridge>> {
-    let mut bridges = Vec::<Bridge>::new();
-
-    for doc in kdl_docs {
-        for bridge_node in doc.nodes() {
-            if bridges
-                .iter()
-                .all(|b: &Bridge| b.name != bridge_node.name().to_string())
-            {
-                bridges.push(Bridge {
-                    name: bridge_node.name().to_string(),
-                });
+            if let Some(existing_bridge) = bridges.iter_mut().find(|b| b.name == bridge.name) {
+                existing_bridge.pkgs.extend(bridge.pkgs);
+            } else {
+                bridges.push(bridge);
             }
         }
     }
@@ -189,14 +181,9 @@ impl Input {
     pub fn load(path: PathBuf) -> Result<Self> {
         let inputs_paths = detect_pkg_kdl_files(&path)?;
         let kdl_docs = parse_inputs_kdl(&inputs_paths)?;
-        let pkgs = parse_pkg(&kdl_docs)?;
         let bridges = parse_bridges(&kdl_docs)?;
         println!("{:#?}", bridges);
 
-        Ok(Self {
-            path,
-            bridges,
-            pkgs,
-        })
+        Ok(Self { path, bridges })
     }
 }
