@@ -1,0 +1,13 @@
+config {
+  inputs {
+    path "~/.config/pkg"
+    bridges-set "~/.config/pkg/.bridges"
+  }
+  output {
+    target-dir "/opt/pkg"
+    load-path "/run/pkg"
+  }
+  db {
+    path "/var/db/pkg/packages.db"
+  }
+}
