@@ -6,3 +6,8 @@
 
 # D2
 /docs/.d2
+
+# Debug
+local.db
+local.db-journal
+*.tmp
