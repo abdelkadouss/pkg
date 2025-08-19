@@ -182,7 +182,6 @@ impl Input {
         let inputs_paths = detect_pkg_kdl_files(&path)?;
         let kdl_docs = parse_inputs_kdl(&inputs_paths)?;
         let bridges = parse_bridges(&kdl_docs)?;
-        println!("{:#?}", bridges);
 
         Ok(Self { path, bridges })
     }
