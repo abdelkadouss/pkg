@@ -14,6 +14,7 @@ pub enum PkgType {
 
 #[derive(Debug)]
 pub struct Version {
+    // FIXME: use u32 instead of String
     pub first_cell: String,
     pub second_cell: String,
     pub third_cell: String,
@@ -67,7 +68,7 @@ mod sql {
     "#;
 
     pub const GET_PKGS_BY_NAME: &str = r#"
-    SELECT name, version, path, pkg_type FROM packages WHERE name = ?;
+    SELECT name, version, path, pkg_type FROM packages WHERE name IN ({});
     "#;
     pub const _GET_PKGS_BY_NAME_AND_VERSION: &str = r#"
     SELECT name, version, path, pkg_type FROM packages WHERE name = ? AND version = ?;
@@ -167,6 +168,59 @@ impl Db {
         let mut stmt = self.conn.prepare(sql::GET_PKGS).into_diagnostic()?;
         let rows = stmt
             .query_map([], |row| {
+                let name: String = row.get(0)?;
+                let version: String = row.get(1)?;
+                let path: String = row.get(2)?;
+                let pkg_type: String = row.get(3)?;
+
+                // Parse version string into components
+                let version_parts: Vec<&str> = version.split('.').collect();
+                if version_parts.len() != 3 {
+                    return Err(RusqliteError::InvalidQuery);
+                }
+
+                // Parse package type
+                let pkg_type = match pkg_type.as_str() {
+                    "SingleExecutable" => PkgType::SingleExecutable,
+                    "Directory" => PkgType::Directory(PathBuf::from(&path)),
+                    _ => return Err(RusqliteError::InvalidQuery),
+                };
+
+                Ok(Pkg {
+                    name,
+                    version: Version {
+                        first_cell: version_parts[0].to_string(),
+                        second_cell: version_parts[1].to_string(),
+                        third_cell: version_parts[2].to_string(),
+                    },
+                    path: PathBuf::from(path),
+                    pkg_type,
+                })
+            })
+            .into_diagnostic()?;
+
+        let mut pkgs = Vec::new();
+        for pkg in rows {
+            pkgs.push(pkg.into_diagnostic()?);
+        }
+
+        Ok(pkgs)
+    }
+
+    pub fn get_pkgs_by_name(&self, pkg_names: &[String]) -> Result<Vec<Pkg>> {
+        if pkg_names.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = pkg_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = sql::GET_PKGS_BY_NAME.replace("{}", &placeholders);
+
+        let mut stmt = self.conn.prepare(&sql).into_diagnostic()?;
+
+        let params: Vec<&str> = pkg_names.iter().map(|s| s.as_str()).collect();
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
                 let name: String = row.get(0)?;
                 let version: String = row.get(1)?;
                 let path: String = row.get(2)?;
