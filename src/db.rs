@@ -1,7 +1,6 @@
-use crate::Bridge;
 use std::{fmt::Debug, path::PathBuf};
 
-use miette::{Diagnostic, IntoDiagnostic, Result, SourceSpan};
+use miette::{Diagnostic, IntoDiagnostic, Result};
 use rusqlite::{Connection, Error as RusqliteError};
 use thiserror::Error;
 
@@ -59,6 +58,7 @@ mod sql {
         path TEXT NOT NULL,
         pkg_type TEXT NOT NULL,
         entry_point TEXT NOT NULL,
+        bridge TEXT NOT NULL,
         PRIMARY KEY (name)
     );
     "#; // NOTE: installing a package twice with or without a deficient version are not allowd in this implementing. and this is just my decision
@@ -69,22 +69,22 @@ mod sql {
     pub const GET_PKGS_BY_NAME: &str = r#"
     SELECT name, version, path, pkg_type FROM packages WHERE name = ?;
     "#;
-    pub const GET_PKGS_BY_NAME_AND_VERSION: &str = r#"
+    pub const _GET_PKGS_BY_NAME_AND_VERSION: &str = r#"
     SELECT name, version, path, pkg_type FROM packages WHERE name = ? AND version = ?;
     "#;
     pub const INSERT_PKGS: &str = r#"
-    INSERT INTO packages (name, version, path, pkg_type, entry_point) 
-    VALUES (?, ?, ?, ?, ?);
+    INSERT INTO packages (name, version, path, pkg_type, entry_point, bridge)
+    VALUES (?, ?, ?, ?, ?, ?);
     "#;
-    pub const UPDATE_PKGS_VERSION: &str = r#"
+    pub const _UPDATE_PKGS_VERSION: &str = r#"
     UPDATE packages
     SET version = ?
     WHERE name = ?;
     "#;
-    pub const UPDATE_PKGS_PATH: &str = r#"
+    pub const _UPDATE_PKGS_PATH: &str = r#"
     UPDATE packages SET path = ? WHERE name = ?;
     "#;
-    pub const UPDATE_PKGS_TYPE: &str = r#"
+    pub const _UPDATE_PKGS_TYPE: &str = r#"
     UPDATE packages SET pkg_type = ? WHERE name = ?;
     "#;
     pub const DELETE_PKGS: &str = r#"
@@ -118,7 +118,7 @@ impl Db {
         Ok(installed_pkgs)
     }
 
-    pub fn install_pkgs(&self, pkgs: &[Pkg]) -> Result<()> {
+    pub fn install_bridge_pkgs(&self, pkgs: &[Pkg], bridge: &String) -> Result<()> {
         let mut stmt = self.conn.prepare(sql::INSERT_PKGS).into_diagnostic()?;
 
         for pkg in pkgs {
@@ -139,8 +139,15 @@ impl Db {
                 PkgType::Directory(ep) => ep.to_string_lossy().into_owned(), // Handle path conversion
             };
 
-            stmt.execute([&pkg.name, &pkg_version, &pkg_path, &pkg_type, &entry_point])
-                .into_diagnostic()?;
+            stmt.execute([
+                &pkg.name,
+                &pkg_version,
+                &pkg_path,
+                &pkg_type,
+                &entry_point,
+                bridge,
+            ])
+            .into_diagnostic()?;
         }
 
         Ok(())

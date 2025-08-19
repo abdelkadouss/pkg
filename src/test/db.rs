@@ -18,7 +18,7 @@ fn init_and_install() {
         pkg_type: PkgType::SingleExecutable,
     }];
 
-    assert!(db.install_pkgs(&pkgs).is_ok());
+    assert!(db.install_bridge_pkgs(&pkgs, &"bridge".to_string()).is_ok());
 
     // Get the installed packages
     let pkgs_names: Vec<String> = pkgs.iter().map(|p| p.name.clone()).collect();
@@ -59,7 +59,7 @@ fn remove_pkgs() {
         },
     ];
 
-    assert!(db.install_pkgs(&pkgs).is_ok());
+    assert!(db.install_bridge_pkgs(&pkgs, &"bridge".to_string()).is_ok());
     let installed = db.get_pkgs().unwrap();
 
     assert_eq!(
