@@ -66,28 +66,22 @@ pub enum InputError {
 
 fn detect_pkg_kdl_files(path: &PathBuf) -> Result<Vec<PathBuf>> {
     let mut inputs_paths = Vec::new();
-
-    if !path.is_dir() {
-        return Ok(inputs_paths);
-    }
-
     for entry in fs::read_dir(path).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
-        let entry_path = entry.path();
+        let path = entry.path();
 
-        if entry_path.is_file() {
-            if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
+        if path.is_file() {
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                 if ext.eq_ignore_ascii_case("kdl") {
-                    if let Some(file_name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                         if !file_name.starts_with('.') {
-                            inputs_paths.push(entry_path);
+                            inputs_paths.push(path);
                         }
                     }
                 }
             }
-        } else if entry_path.is_dir() {
-            // Only recurse into actual directories
-            inputs_paths.extend(detect_pkg_kdl_files(&entry_path)?);
+        } else if path.is_dir() {
+            inputs_paths.extend(detect_pkg_kdl_files(&path)?);
         }
     }
     Ok(inputs_paths)
