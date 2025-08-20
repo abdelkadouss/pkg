@@ -8,6 +8,7 @@ use pkg::{
 use tempfile::NamedTempFile;
 
 fn main() {
+    let _ = std::fs::write("remove_me", "");
     let db_file = NamedTempFile::new().unwrap();
     let db = Db::new(db_file.path().to_path_buf()).unwrap();
     let pkgs = vec![Pkg {
@@ -17,7 +18,7 @@ fn main() {
             second_cell: "2".into(),
             third_cell: "3".into(),
         },
-        path: "/Users/abdelkdous/remove_me".into(),
+        path: "remove_me".into(),
         pkg_type: PkgType::SingleExecutable,
     }];
 

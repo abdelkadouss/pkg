@@ -10,5 +10,7 @@ pub mod bridge;
 
 pub mod fs;
 
+pub mod cmd;
+
 #[cfg(test)]
 mod test;
