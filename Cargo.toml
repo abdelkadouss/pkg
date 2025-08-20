@@ -3,9 +3,9 @@ name = "pkg"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-default = ["api"]  # Make api a default feature
-api = []
+# [features]
+# default = ["api"]  # Make api a default feature
+# api = []
 
 [dependencies]
 mlua = { version = '0.11.2', features = ['vendored', 'lua54', 'async', 'send'] }

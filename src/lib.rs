@@ -8,8 +8,10 @@ use db::{Pkg, PkgType, Version as PkgVersion};
 
 pub mod bridge;
 
-#[cfg(feature = "api")]
-pub mod api;
+pub mod fs;
+
+// #[cfg(feature = "api")]
+// pub mod api;
 
 #[cfg(test)]
 mod test;
