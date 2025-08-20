@@ -3,10 +3,6 @@ name = "pkg"
 version = "0.1.0"
 edition = "2024"
 
-# [features]
-# default = ["api"]  # Make api a default feature
-# api = []
-
 [dependencies]
 mlua = { version = '0.11.2', features = ['vendored', 'lua54', 'async', 'send'] }
 miette = { version = "7.6.0", features = ["fancy"] }
@@ -14,6 +10,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 thiserror = "2.0.15"
 kdl = "6.3.4"
 simplelog = "0.12"
+clap = "4.5.45"
 
 [dev-dependencies]
 tempfile = "3.20.0"

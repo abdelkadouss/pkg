@@ -9,8 +9,8 @@ local install = function(input, opts)
   }
 end
 
-local remove = function(input, opts)
+Remove = function(input, opts)
   print("Removing via bridge2 useing the" .. input .. " input and the" .. table.concat(opts, ",") .. " opts")
 end
 
-return { install = install, remove = remove }
+return { install = install }

@@ -10,8 +10,5 @@ pub mod bridge;
 
 pub mod fs;
 
-// #[cfg(feature = "api")]
-// pub mod api;
-
 #[cfg(test)]
 mod test;

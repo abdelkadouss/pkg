@@ -1,5 +1,5 @@
 use crate::{Pkg, db::Db};
-use miette::{Diagnostic, IntoDiagnostic, Result, SourceSpan};
+use miette::{Diagnostic, IntoDiagnostic, Result};
 use std::path::PathBuf;
 use thiserror::Error;
 

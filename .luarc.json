@@ -1,5 +1,6 @@
 {
     "diagnostics.globals": [
-        "utils"
+        "utils",
+        "defaults"
     ]
 }
