@@ -1,7 +1,4 @@
-use clap::{ArgAction, Parser, Subcommand};
-use rpassword::read_password;
-use std::path::PathBuf;
-use std::process::Command;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "pkg")]
@@ -14,25 +11,25 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Sync packages with configuration (install missing packages)
+    /// Sync packages with configuration (install/remove as configured)
     Build {
-        /// Force reinstall even if package already exists
+        /// even update the installed packages via the update command
         #[arg(short, long)]
         update: bool,
     },
 
     /// Force sync all packages (reinstall everything)
-    Rebuild {},
+    Rebuild,
 
     /// Update packages
     Update {
-        /// Specific packages to update (default: all)
+        /// Specific packages to update ( default: all )
         packages: Option<Vec<String>>,
     },
 
     /// List installed packages
     Info {
-        /// A packge to show information about [default: all]
+        /// A packge to show information about ( default: all )
         package: Option<Vec<String>>,
 
         /// Show detailed information
@@ -45,9 +42,7 @@ pub enum Commands {
     },
 
     /// Clean cache and temporary files
-    Clean {
-        /// Remove all cached files, including logs
-    },
+    Clean,
 }
 
 // Helper function to parse CLI arguments

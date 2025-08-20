@@ -46,11 +46,16 @@ pub enum ConfigError {
         #[label("This path is invalid")]
         bad_span: SourceSpan,
     },
+
+    #[error("missing config file")]
+    #[diagnostic(code(config::missing_config_file))]
+    MissingConfigFile,
 }
 
 impl Config {
     pub fn load(path: PathBuf) -> Result<Self> {
-        let config_file = std::fs::read_to_string(&path).into_diagnostic()?;
+        let config_file =
+            std::fs::read_to_string(&path).map_err(|_| ConfigError::MissingConfigFile)?;
 
         let kdl = config_file.parse::<KdlDocument>().into_diagnostic()?;
 

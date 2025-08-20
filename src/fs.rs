@@ -18,7 +18,12 @@ pub enum FsError {
 }
 
 impl Fs {
-    pub fn new(target_dir: PathBuf, load_path: PathBuf, db: Db) -> Self {
+    pub fn new(target_dir: PathBuf, load_path: PathBuf, db_path: &PathBuf) -> Self {
+        let db = Db::new(db_path).unwrap();
+
+        let _ = std::fs::create_dir_all(&target_dir);
+        let _ = std::fs::create_dir_all(&load_path);
+
         Self {
             target_dir,
             load_path,

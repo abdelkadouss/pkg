@@ -94,12 +94,15 @@ mod sql {
 }
 
 impl Db {
-    pub fn new(path: PathBuf) -> Result<Self> {
-        let conn = Connection::open(&path).into_diagnostic()?;
+    pub fn new(path: &PathBuf) -> Result<Self> {
+        let conn = Connection::open(path).into_diagnostic()?;
 
         conn.execute(sql::CREATE_PKGS_TABLE, []).into_diagnostic()?;
 
-        Ok(Self { conn, path })
+        Ok(Self {
+            conn,
+            path: path.clone(),
+        })
     }
 
     // wiil to be clean i don't understand everything here because my code make a lifetime

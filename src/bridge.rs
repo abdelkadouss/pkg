@@ -334,7 +334,7 @@ impl BridgeApi {
     pub fn new(
         bridge_set_path: PathBuf,
         needed_bridges: Vec<String>,
-        db_path: PathBuf,
+        db_path: &PathBuf,
     ) -> Result<Self> {
         let bridge_set_dir_content = get_bridges_paths(bridge_set_path)?;
         let lua = Lua::new();

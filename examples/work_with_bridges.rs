@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 fn main() {
     let _ = std::fs::write("remove_me", "");
     let db_file = NamedTempFile::new().unwrap();
-    let db = Db::new(db_file.path().to_path_buf()).unwrap();
+    let db = Db::new(&db_file.path().to_path_buf()).unwrap();
     let pkgs = vec![Pkg {
         name: "pkg1".into(),
         version: Version {
@@ -29,14 +29,14 @@ fn main() {
 
     let bridge_set_path = std::path::PathBuf::from("examples/assets/bridges");
 
-    let input = Input::load(std::path::PathBuf::from("examples/assets/inputs")).unwrap();
+    let input = Input::load(&std::path::PathBuf::from("examples/assets/inputs")).unwrap();
     let needed_bridges = input
         .bridges
         .iter()
         .map(|b| b.name.clone())
         .collect::<Vec<String>>();
 
-    let bridge_api = BridgeApi::new(bridge_set_path, needed_bridges, db.path.clone()).unwrap();
+    let bridge_api = BridgeApi::new(bridge_set_path, needed_bridges, &db.path.clone()).unwrap();
 
     for bridge in input.bridges {
         for pkg in bridge.pkgs {
