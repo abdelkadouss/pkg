@@ -45,30 +45,64 @@ impl Fs {
                 std::fs::remove_file(&target).into_diagnostic()?;
             }
 
-            std::fs::hard_link(pkg.path, &target).into_diagnostic()?;
+            std::os::unix::fs::symlink(&pkg.path, &target).into_diagnostic()?;
         }
 
         Ok(())
     }
 
-    pub fn store_or_overwrite(&self, pkgs: &[Pkg], bridge_name: Option<&str>) -> Result<()> {
+    pub fn store_or_overwrite(
+        &self,
+        pkgs: &[&Pkg],
+        bridge_name: Option<&str>,
+    ) -> Result<Vec<PathBuf>> {
         if !self.target_dir.exists() {
             std::fs::create_dir_all(&self.target_dir).into_diagnostic()?;
         }
 
+        let mut new_paths = Vec::new();
+
         for pkg in pkgs {
-            let target = self
-                .target_dir
-                .join(bridge_name.unwrap_or(""))
-                .join(&pkg.name);
+            let target_dir = self.target_dir.join(bridge_name.unwrap_or(""));
+
+            if !target_dir.exists() {
+                std::fs::create_dir_all(&target_dir).into_diagnostic()?;
+            }
+
+            let target = target_dir.join(&pkg.name);
 
             if target.exists() {
                 std::fs::remove_file(&target).into_diagnostic()?;
             }
 
             std::fs::rename(&pkg.path, &target).into_diagnostic()?;
+
+            new_paths.push(target);
         }
 
-        Ok(())
+        Ok(new_paths)
+    }
+
+    pub fn remove_pkgs(&self, pkgs: &[&String]) -> Result<bool> {
+        let pkgs = pkgs.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let pkgs = pkgs.as_slice();
+
+        let mut removed = false;
+
+        let pkgs = self.db.get_pkgs_by_name(pkgs)?;
+
+        for pkg in pkgs {
+            let target = self.target_dir.join(&pkg.name);
+
+            if target.exists() {
+                if target.is_dir() {
+                    std::fs::remove_dir_all(&target).into_diagnostic()?;
+                } else {
+                    std::fs::remove_file(&target).into_diagnostic()?;
+                }
+                removed = true;
+            }
+        }
+        Ok(removed)
     }
 }
