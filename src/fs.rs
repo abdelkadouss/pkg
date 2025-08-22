@@ -1,4 +1,7 @@
-use crate::{Pkg, db::Db};
+use crate::{
+    Pkg,
+    db::{Db, PkgType},
+};
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -45,7 +48,14 @@ impl Fs {
                 std::fs::remove_file(&target).into_diagnostic()?;
             }
 
-            std::os::unix::fs::symlink(&pkg.path, &target).into_diagnostic()?;
+            match pkg.pkg_type {
+                PkgType::SingleExecutable => {
+                    std::os::unix::fs::symlink(&pkg.path, &target).into_diagnostic()?;
+                }
+                PkgType::Directory(ref entry_point) => {
+                    std::os::unix::fs::symlink(entry_point, &target).into_diagnostic()?;
+                }
+            }
         }
 
         Ok(())
