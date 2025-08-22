@@ -12,6 +12,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Sync packages with configuration (install/remove as configured)
+    #[command(alias = "sync")]
     Build {
         /// even update the installed packages via the update command
         #[arg(short, long)]
@@ -31,14 +32,6 @@ pub enum Commands {
     Info {
         /// A packge to show information about ( default: all )
         package: Option<Vec<String>>,
-
-        /// Show detailed information
-        #[arg(short, long)]
-        long: bool,
-
-        /// Filter by bridge
-        #[arg(short, long)]
-        bridge: Option<String>,
     },
 
     /// Clean cache and temporary files

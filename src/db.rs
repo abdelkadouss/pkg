@@ -68,6 +68,10 @@ mod sql {
     "#;
 
     pub const GET_PKGS_BY_NAME: &str = r#"
+    SELECT name, version, path, pkg_type FROM packages WHERE name = ?;
+    "#;
+
+    pub const GET_PKGS_BY_NAMES: &str = r#"
     SELECT name, version, path, pkg_type FROM packages WHERE name IN ({});
     "#;
     pub const _GET_PKGS_BY_NAME_AND_VERSION: &str = r#"
@@ -122,7 +126,7 @@ impl Db {
         Ok(installed_pkgs)
     }
 
-    pub fn install_bridge_pkgs(&self, pkgs: &[Pkg], bridge: &String) -> Result<()> {
+    pub fn install_bridge_pkgs(&self, pkgs: &[&Pkg], bridge: &String) -> Result<()> {
         let mut stmt = self.conn.prepare(sql::INSERT_PKGS).into_diagnostic()?;
 
         for pkg in pkgs {
@@ -216,7 +220,7 @@ impl Db {
         }
 
         let placeholders = pkg_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let sql = sql::GET_PKGS_BY_NAME.replace("{}", &placeholders);
+        let sql = sql::GET_PKGS_BY_NAMES.replace("{}", &placeholders);
 
         let mut stmt = self.conn.prepare(&sql).into_diagnostic()?;
 
