@@ -74,23 +74,9 @@ mod sql {
     pub const GET_PKGS_BY_NAMES: &str = r#"
     SELECT name, version, path, pkg_type FROM packages WHERE name IN ({});
     "#;
-    pub const _GET_PKGS_BY_NAME_AND_VERSION: &str = r#"
-    SELECT name, version, path, pkg_type FROM packages WHERE name = ? AND version = ?;
-    "#;
     pub const INSERT_PKGS: &str = r#"
     INSERT INTO packages (name, version, path, pkg_type, entry_point, bridge)
     VALUES (?, ?, ?, ?, ?, ?);
-    "#;
-    pub const _UPDATE_PKGS_VERSION: &str = r#"
-    UPDATE packages
-    SET version = ?
-    WHERE name = ?;
-    "#;
-    pub const _UPDATE_PKGS_PATH: &str = r#"
-    UPDATE packages SET path = ? WHERE name = ?;
-    "#;
-    pub const _UPDATE_PKGS_TYPE: &str = r#"
-    UPDATE packages SET pkg_type = ? WHERE name = ?;
     "#;
     pub const DELETE_PKGS: &str = r#"
     DELETE FROM packages WHERE name = ?;
