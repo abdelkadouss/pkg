@@ -1,8 +1,10 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
 
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use rusqlite::{Connection, Error as RusqliteError};
 use thiserror::Error;
+
+use crate::input::PkgDeclaration;
 
 pub type EntryPoint = PathBuf;
 
@@ -81,6 +83,21 @@ mod sql {
     pub const DELETE_PKGS: &str = r#"
     DELETE FROM packages WHERE name = ?;
     "#;
+    pub const GET_PKG_BRIDGE_BY_NAME: &str = r#"
+    SELECT bridge FROM packages WHERE name = ?;
+    "#;
+}
+
+impl Pkg {
+    // NOTE: if pkg is removed form the input, so it's logical to loss the
+    // attributes, i think that's not a bug
+    pub fn to_pkg_declaration_with_empty_attributes(&self) -> PkgDeclaration {
+        PkgDeclaration {
+            name: self.name.clone(),
+            input: self.path.to_str().unwrap().to_string(),
+            attributes: HashMap::new(),
+        }
+    }
 }
 
 impl Db {
@@ -93,6 +110,19 @@ impl Db {
             conn,
             path: path.clone(),
         })
+    }
+
+    pub fn get_pkg_bridge_by_name(&self, pkg_name: &str) -> Result<String> {
+        let mut stmt = self
+            .conn
+            .prepare(sql::GET_PKG_BRIDGE_BY_NAME)
+            .into_diagnostic()?;
+
+        let bridge = stmt
+            .query_row([&pkg_name], |row| row.get(0))
+            .into_diagnostic()?;
+
+        Ok(bridge)
     }
 
     // wiil to be clean i don't understand everything here because my code make a lifetime
