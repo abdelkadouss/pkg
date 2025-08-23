@@ -64,7 +64,7 @@ mod sql {
     );
     "#; // NOTE: installing a package twice with or without a deficient version are not allowd in this implementing. and this is just my decision
     pub const GET_PKGS: &str = r#"
-    SELECT name, version, path, pkg_type FROM packages;
+    SELECT name, version, path, pkg_type, entry_point FROM packages;
     "#;
 
     pub const GET_PKGS_BY_NAME: &str = r#"
@@ -165,6 +165,7 @@ impl Db {
                 let version: String = row.get(1)?;
                 let path: String = row.get(2)?;
                 let pkg_type: String = row.get(3)?;
+                let entry_point: String = row.get(4)?;
 
                 // Parse version string into components
                 let version_parts: Vec<&str> = version.split('.').collect();
@@ -175,7 +176,7 @@ impl Db {
                 // Parse package type
                 let pkg_type = match pkg_type.as_str() {
                     "SingleExecutable" => PkgType::SingleExecutable,
-                    "Directory" => PkgType::Directory(PathBuf::from(&path)),
+                    "Directory" => PkgType::Directory(PathBuf::from(&entry_point)),
                     _ => return Err(RusqliteError::InvalidQuery),
                 };
 
