@@ -96,6 +96,14 @@ pub enum BridgeApiError {
     #[error("Bridge returned an error: {0}")]
     #[diagnostic(code(bridge::lua_error))]
     BridgeError(String),
+
+    #[error("Bridge returned an invalid pkg path: {0}")]
+    #[diagnostic(code(bridge::bridge_returned_un_valid_pkg_path))]
+    BridgeReturnedUnValidPkgPath(PathBuf),
+
+    #[error("Bridge returned an invalid pkg path as entry point: {0}")]
+    #[diagnostic(code(bridge::entry_point_not_found))]
+    BridgeReturnedUnValidPkgPathAsEntryPoint(PathBuf),
 }
 
 fn get_bridges_paths(bridge_set_path: PathBuf) -> Result<Vec<PathBuf>> {
@@ -130,14 +138,24 @@ fn get_bridges_paths(bridge_set_path: PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 fn setup_working_directory(bridge_name: &str, pkg: &PkgDeclaration) -> Result<PathBuf> {
-    let tmp_dir = PathBuf::from(DEFAULT_WORKING_DIR)
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let tmp_dir_base = PathBuf::from(DEFAULT_WORKING_DIR)
         .join(bridge_name)
         .join(&pkg.name);
 
-    // Remove the directory if it already exists
-    if tmp_dir.exists() {
-        std::fs::remove_dir_all(&tmp_dir).into_diagnostic()?;
-    }
+    let tmp_dir = loop {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+
+        let tmp_dir = tmp_dir_base.join(format!("{timestamp}"));
+
+        if !tmp_dir.exists() {
+            break tmp_dir;
+        }
+    };
 
     // Create the directory
     std::fs::create_dir_all(&tmp_dir).into_diagnostic()?;
@@ -190,7 +208,11 @@ fn get_bridges(
                     let pkg_path = opts.get::<String>("pkg_path")?;
                     let mut removed = false;
                     if PathBuf::from(&pkg_path).exists() {
-                        std::fs::remove_file(&pkg_path)?;
+                        if PathBuf::from(&pkg_path).is_dir() {
+                            std::fs::remove_dir_all(&pkg_path)?;
+                        } else {
+                            std::fs::remove_file(&pkg_path)?;
+                        }
                         removed = true;
                     }
                     Ok(removed)
@@ -215,7 +237,14 @@ fn get_bridges(
                     }
 
                     let pkg_path = opts.get::<String>("pkg_path")?;
-                    std::fs::remove_file(&pkg_path)?;
+
+                    if PathBuf::from(&pkg_path).exists() {
+                        if PathBuf::from(&pkg_path).is_dir() {
+                            std::fs::remove_dir_all(&pkg_path)?;
+                        } else {
+                            std::fs::remove_file(&pkg_path)?;
+                        }
+                    }
 
                     Ok(output)
                 },
@@ -362,7 +391,35 @@ fn convert_lua_table_to_pkg(lua_table: LuaTable, pkg_name: &str) -> Result<Pkg> 
         third_cell: pkg_version[2].clone(),
     };
 
-    let pkg_path = PathBuf::from(pkg_path);
+    let mut pkg_path = PathBuf::from(pkg_path);
+
+    // get the absolute path of the pkg_path
+    if pkg_path.is_relative() {
+        pkg_path = std::env::current_dir().into_diagnostic()?.join(pkg_path);
+    }
+
+    if !pkg_path.exists() {
+        return Err(BridgeApiError::BridgeReturnedUnValidPkgPath(pkg_path)).into_diagnostic()?;
+    }
+
+    let pkg_type = if let PkgType::Directory(ref entry_point) = pkg_type {
+        // get the absolute path of the entry_point
+        let entry_point = if entry_point.is_relative() {
+            std::env::current_dir().into_diagnostic()?.join(entry_point)
+        } else {
+            entry_point.clone()
+        };
+
+        if !entry_point.exists() {
+            return Err(BridgeApiError::BridgeReturnedUnValidPkgPathAsEntryPoint(
+                entry_point.clone(),
+            ))
+            .into_diagnostic()?;
+        }
+        PkgType::Directory(entry_point)
+    } else {
+        pkg_type
+    };
 
     Ok(Pkg {
         name: pkg_name,
