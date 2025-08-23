@@ -1,9 +1,4 @@
-use clap::Parser;
-use cli_table::{Cell, Style, Table, print_stdout};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use miette::{IntoDiagnostic, Result};
-use owo_colors::OwoColorize;
-use pkg::{
+use crate::{
     DEFAULT_CONFIG_FILE_EXTENSION, DEFAULT_CONFIG_FILE_NAME, DEFAULT_LOG_DIR, DEFAULT_WORKING_DIR,
     bridge,
     cmd::{Cli, Commands},
@@ -12,6 +7,11 @@ use pkg::{
     fs,
     input::{self, PkgDeclaration},
 };
+use clap::Parser;
+use cli_table::{Cell, Style, Table, print_stdout};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use miette::{IntoDiagnostic, Result};
+use owo_colors::OwoColorize;
 use rpassword::read_password;
 use std::{
     io::{self, Write},
