@@ -63,14 +63,12 @@ impl Fs {
 
     pub fn store_or_overwrite(
         &self,
-        pkgs: &[&Pkg],
+        pkgs: &mut [&mut Pkg],
         bridge_name: Option<&str>,
-    ) -> Result<Vec<PathBuf>> {
+    ) -> Result<()> {
         if !self.target_dir.exists() {
             std::fs::create_dir_all(&self.target_dir).into_diagnostic()?;
         }
-
-        let mut new_paths = Vec::new();
 
         for pkg in pkgs {
             let target_dir = self.target_dir.join(bridge_name.unwrap_or(""));
@@ -82,15 +80,29 @@ impl Fs {
             let target = target_dir.join(&pkg.name);
 
             if target.exists() {
-                std::fs::remove_file(&target).into_diagnostic()?;
+                if target.is_dir() {
+                    std::fs::remove_dir_all(&target).into_diagnostic()?;
+                } else {
+                    std::fs::remove_file(&target).into_diagnostic()?;
+                }
             }
 
             std::fs::rename(&pkg.path, &target).into_diagnostic()?;
 
-            new_paths.push(target);
+            if let PkgType::Directory(ref entry_point) = pkg.pkg_type {
+                // change the entry point parent to the target dir
+                let entry_point_str = entry_point.to_str().unwrap();
+                let old_path_str = pkg.path.to_str().unwrap();
+                let target_str = target.to_str().unwrap();
+
+                let new_entry_point_str = entry_point_str.replace(old_path_str, target_str);
+                pkg.pkg_type = PkgType::Directory(PathBuf::from(new_entry_point_str))
+            };
+
+            pkg.path = target;
         }
 
-        Ok(new_paths)
+        Ok(())
     }
 
     pub fn remove_pkgs(&self, pkgs: &[&String]) -> Result<bool> {
