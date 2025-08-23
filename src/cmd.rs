@@ -34,6 +34,9 @@ pub enum Commands {
         package: Option<Vec<String>>,
     },
 
+    /// Link packages in PATH
+    Link,
+
     /// Clean cache and temporary files
     Clean,
 }

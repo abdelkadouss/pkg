@@ -52,6 +52,13 @@ fn main() -> Result<()> {
 
     let fs = fs::Fs::new(target_dir, load_path, &db_path);
 
+    let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+        .unwrap()
+        .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+    let job_style = ProgressStyle::with_template("{wide_msg}")
+        .unwrap()
+        .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
     match &cli.command {
         Commands::Clean => {
             if PathBuf::from(DEFAULT_LOG_DIR).exists() {
@@ -65,6 +72,7 @@ fn main() -> Result<()> {
 
             Ok(())
         }
+        Commands::Link => perform_linking(&fs, job_style.clone()),
         Commands::Info { package } => {
             let pkgs = if let Some(packages) = package {
                 db.get_pkgs_by_name(packages)?
@@ -106,14 +114,6 @@ fn main() -> Result<()> {
         }
         _ => {
             // Handle commands
-            let spinner_style =
-                ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
-                    .unwrap()
-                    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-            let job_style = ProgressStyle::with_template("{wide_msg}")
-                .unwrap()
-                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-
             let mut total_installed_pkgs_count_index = 0;
             let mut total_removed_pkgs_count_index = 0;
 
@@ -145,14 +145,7 @@ fn main() -> Result<()> {
 
                 let pkgs_to_remove_count = installed_pkgs_not_in_input.len();
                 let pkgs_to_install_count = not_installed_pkgs_in_input.len();
-                let mut pkgs_to_update_count = installed_pkgs_in_input.len();
-
-                print_bridge_header(
-                    &bridge.name,
-                    pkgs_to_install_count,
-                    pkgs_to_remove_count,
-                    pkgs_to_update_count,
-                );
+                let mut pkgs_to_update_count = 0;
 
                 let m = MultiProgress::new();
 
@@ -181,6 +174,13 @@ fn main() -> Result<()> {
 
                     jobs.push(Job::Update);
                 }
+
+                print_bridge_header(
+                    &bridge.name,
+                    pkgs_to_install_count,
+                    pkgs_to_remove_count,
+                    pkgs_to_update_count,
+                );
 
                 for job in jobs {
                     let pkgs = match job {
@@ -504,14 +504,26 @@ fn print_bridge_header(
     pkgs_to_remove_count: usize,
     pkgs_to_update_count: usize,
 ) {
-    println!(
-        "{} {}: {}⤵️ {} 🗑️ {} 📦",
+    if pkgs_to_install_count == 0 && pkgs_to_remove_count == 0 && pkgs_to_update_count == 0 {
+        return;
+    }
+
+    print!(
+        "{} {}: ",
         "bridge:".green().bold(),
-        bridge_name.underline().blue(),
-        &pkgs_to_install_count.blue().bold(),
-        &pkgs_to_remove_count.blue().bold(),
-        &pkgs_to_update_count.blue().bold()
+        bridge_name.underline().blue()
     );
+
+    for count in [
+        (pkgs_to_install_count, "⤵️"),
+        (pkgs_to_remove_count, "🗑️"),
+        (pkgs_to_update_count, "🔄"),
+    ] {
+        if count.0 > 0 {
+            print!(" {} {}", &count.0.blue().bold(), &count.1);
+        }
+    }
+    println!();
 }
 
 fn print_job_header(job_name: &str) {
