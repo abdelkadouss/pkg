@@ -19,9 +19,9 @@ pub enum FsError {
     #[diagnostic(code(fs::io_error))]
     IoError(#[from] std::io::Error),
 
-    #[error("The given load path is exist and is a file")]
+    #[error("The given load path is exist and is a file {0}")]
     #[diagnostic(code(fs::load_path_is_file))]
-    LoadPathIsFile,
+    LoadPathIsFile(PathBuf),
 }
 
 impl Fs {
@@ -43,11 +43,11 @@ impl Fs {
 
         if !self.load_path.exists() {
             std::fs::create_dir_all(&self.load_path).into_diagnostic()?;
-        } else if !self.load_path.is_dir() {
+        } else if self.load_path.is_dir() {
             std::fs::remove_dir_all(&self.load_path).into_diagnostic()?;
             std::fs::create_dir_all(&self.load_path).into_diagnostic()?;
         } else {
-            return Err(FsError::LoadPathIsFile).into_diagnostic()?;
+            return Err(FsError::LoadPathIsFile(self.load_path.clone())).into_diagnostic()?;
         }
 
         for pkg in pkgs {

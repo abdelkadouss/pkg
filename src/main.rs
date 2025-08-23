@@ -140,7 +140,7 @@ fn main() -> Result<()> {
                     installed_pkgs_in_input,
                     not_installed_pkgs_in_input,
                     installed_pkgs_not_in_input,
-                ) = filter_pkgs_by_statuses(&db, &pkgs, &bridge.pkgs)?;
+                ) = filter_pkgs_by_statuses(&db, &pkgs, &bridge.pkgs, bridge.name.as_str())?;
                 let mut installed_pkgs_in_input = installed_pkgs_in_input;
 
                 let pkgs_to_remove_count = installed_pkgs_not_in_input.len();
@@ -165,7 +165,7 @@ fn main() -> Result<()> {
                         let mut pkgs = Vec::new();
                         installed_pkgs_in_input.iter().for_each(|pkg| {
                             if packages.contains(&pkg.name) {
-                                pkgs.push(*pkg);
+                                pkgs.push(pkg.clone());
                             }
                         });
                         installed_pkgs_in_input = pkgs.clone();
@@ -453,14 +453,15 @@ fn get_valid_config_path() -> Result<PathBuf> {
     Ok(xdg_config_home)
 }
 
-fn filter_pkgs_by_statuses<'a>(
+fn filter_pkgs_by_statuses(
     db: &Db,
     inputs_pkgs: &[String],
-    pkgs_declarations: &'a [PkgDeclaration],
+    pkgs_declarations: &[PkgDeclaration],
+    bridge_name: &str,
 ) -> Result<(
-    Vec<&'a PkgDeclaration>,
-    Vec<&'a PkgDeclaration>,
-    Vec<&'a PkgDeclaration>,
+    Vec<PkgDeclaration>,
+    Vec<PkgDeclaration>,
+    Vec<PkgDeclaration>,
 )> {
     let all_installed_pkgs = db.get_pkgs()?;
 
@@ -475,6 +476,7 @@ fn filter_pkgs_by_statuses<'a>(
     let installed_pkgs_in_input = pkgs_declarations
         .iter()
         .filter(|p| installed_pkgs_in_input_names.iter().any(|n| **n == p.name))
+        .cloned()
         .collect();
 
     let not_installed_pkgs_in_input = pkgs_declarations
@@ -484,11 +486,19 @@ fn filter_pkgs_by_statuses<'a>(
                 .iter()
                 .any(|n| **n == p.name)
         })
+        .cloned()
         .collect();
 
-    let installed_pkgs_not_in_input = pkgs_declarations
+    let installed_pkgs_not_in_input = all_installed_pkgs
         .iter()
-        .filter(|p| installed_pkgs_not_in_input_names.contains(&p.name))
+        .filter(|p| {
+            installed_pkgs_not_in_input_names.contains(&p.name)
+                && db
+                    .get_pkg_bridge_by_name(&p.name)
+                    .expect("Failed to get pkg bridge")
+                    == bridge_name
+        })
+        .map(|p| p.to_pkg_declaration_with_empty_attributes())
         .collect();
 
     Ok((

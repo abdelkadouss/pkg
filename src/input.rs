@@ -10,7 +10,7 @@ pub enum PkgType {
     Folder(PathBuf),  // the entry point of the package
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AttributeValue {
     String(String),
     Integer(i64),
@@ -18,7 +18,7 @@ pub enum AttributeValue {
     Boolean(bool),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PkgDeclaration {
     pub name: String,
     pub input: String,
@@ -142,11 +142,14 @@ fn parse_bridges(kdl_docs: &[KdlDocument]) -> Result<Vec<Bridge>> {
                 let input = pkg_decl_node
                     .entries()
                     .first()
-                    .ok_or(InputError::MissingField)?
-                    .value()
-                    .as_string()
-                    .ok_or(InputError::InvalidAttribute)?
-                    .to_string();
+                    .map(|entry| {
+                        entry
+                            .value()
+                            .as_string()
+                            .ok_or(InputError::InvalidAttribute)
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| Ok(pkg_decl_node.name().to_string()))?;
 
                 let pkg_decl = PkgDeclaration {
                     name: pkg_decl_node.name().to_string(),
