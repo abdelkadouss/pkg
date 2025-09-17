@@ -6,8 +6,8 @@ use crate::db::*;
 #[test]
 fn init_and_install() {
     let db_file = NamedTempFile::new().unwrap();
-    let db = Db::new(db_file.path().to_path_buf()).unwrap();
-    let pkgs = vec![Pkg {
+    let db = Db::new(&db_file.path().to_path_buf()).unwrap();
+    let pkgs = [&Pkg {
         name: "pkg1".into(),
         version: Version {
             first_cell: "1".into(),
@@ -34,10 +34,10 @@ fn init_and_install() {
 #[test]
 fn remove_pkgs() {
     let db_file = NamedTempFile::new().unwrap();
-    let db = Db::new(db_file.path().to_path_buf()).unwrap();
+    let db = Db::new(&db_file.path().to_path_buf()).unwrap();
 
-    let pkgs = vec![
-        Pkg {
+    let pkgs = [
+        &Pkg {
             name: "pkg1".into(),
             version: Version {
                 first_cell: "1".into(),
@@ -47,7 +47,7 @@ fn remove_pkgs() {
             path: "some/path".into(),
             pkg_type: PkgType::SingleExecutable,
         },
-        Pkg {
+        &Pkg {
             name: "pkg2".into(),
             version: Version {
                 first_cell: "1".into(),

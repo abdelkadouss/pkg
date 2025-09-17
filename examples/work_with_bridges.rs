@@ -11,7 +11,7 @@ fn main() {
     let _ = std::fs::write("remove_me", "");
     let db_file = NamedTempFile::new().unwrap();
     let db = Db::new(&db_file.path().to_path_buf()).unwrap();
-    let pkgs = vec![Pkg {
+    let pkgs = [&Pkg {
         name: "pkg1".into(),
         version: Version {
             first_cell: "1".into(),
@@ -41,7 +41,7 @@ fn main() {
     for bridge in input.bridges {
         for pkg in bridge.pkgs {
             let pkg_name = pkg.name.clone();
-            let _ = bridge_api.install(&bridge.name, pkg).map_err(|_| {
+            let _ = bridge_api.install(&bridge.name, &pkg).map_err(|_| {
                 println!("Failed to install {}", pkg_name);
             });
         }
@@ -53,5 +53,5 @@ fn main() {
         attributes: HashMap::new(),
     };
 
-    bridge_api.update("bridge1", pkg).unwrap();
+    bridge_api.update("bridge1", &pkg).unwrap();
 }
