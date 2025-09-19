@@ -1,9 +1,10 @@
-use clap::{Parser, Subcommand};
+use clap::{ColorChoice, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "pkg")]
 #[command(version = "0.1.0")]
 #[command(about = "A package manager with Lua bridge support", long_about = None)]
+#[command(color = ColorChoice::Always)] // Always show colors
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -12,7 +13,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Sync packages with configuration (install/remove as configured)
-    #[command(alias = "sync")]
+    #[command(alias = "sync", alias = "b", alias = "s")]
     Build {
         /// even update the installed packages via the update command
         #[arg(short, long)]
@@ -23,6 +24,7 @@ pub enum Commands {
     Rebuild,
 
     /// Update packages
+    #[command(alias = "u")]
     Update {
         /// Specific packages to update ( default: all )
         packages: Option<Vec<String>>,
@@ -39,6 +41,9 @@ pub enum Commands {
 
     /// Clean cache and temporary files
     Clean,
+
+    /// Some notes can help insha'Allah
+    Docs,
 }
 
 // Helper function to parse CLI arguments

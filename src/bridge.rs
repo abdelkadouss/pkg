@@ -1,44 +1,55 @@
 use crate::{DEFAULT_LOG_DIR, DEFAULT_WORKING_DIR, db::Db, input::PkgDeclaration};
 use miette::{Diagnostic, IntoDiagnostic, Result};
-use mlua::{Function as LuaFunction, Lua, Result as LuaResult, Table as LuaTable};
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{
+    collections::HashMap,
+    env,
+    fs::OpenOptions,
+    io::Write,
+    path::PathBuf,
+    process::{self, Output},
+};
 use thiserror::Error;
 
 use crate::{Pkg, PkgType, PkgVersion, input};
 
 #[derive(Debug, Clone)]
-pub struct LuaBridgeImplementation {
-    pub install_fn: LuaFunction,
-    pub remove_fn: LuaFunction,
-    pub update_fn: LuaFunction,
-    pub name: String,
+struct Bridge {
+    name: String,
+    entry_point: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct BridgeApi {
-    pub lua: Lua,
-    pub needed_bridges: Vec<String>,
-    bridges: Vec<LuaBridgeImplementation>,
+    bridges: Vec<Bridge>,
     db: Db,
+}
+
+#[derive(Debug)]
+pub struct BridgeOutput {
+    version: PkgVersion,
+    pkg_path: PathBuf,
+    pkg_type: PkgType,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Operation {
+    Install,
+    Update,
+    Remove,
+}
+
+#[derive(Debug)]
+pub enum OperationResult {
+    Installed(Pkg),
+    Updated(Pkg),
+    Removed(bool),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum BridgeApiError {
     #[error(transparent)]
-    #[diagnostic(code(bridge::lua_error))]
-    LuaError(#[from] mlua::Error),
-
-    #[error(transparent)]
     #[diagnostic(code(bridge::io_error))]
     IoError(#[from] std::io::Error),
-
-    #[error("Bridge set is missing main.lua")]
-    #[diagnostic(code(bridge::missing_main_dot_lua_file))]
-    MissingMainDotLuaFile,
-
-    #[error("Bridge is missing required install function")]
-    #[diagnostic(code(bridge::missing_install_fn))]
-    MissingInstallFunction,
 
     #[error("Bridge not found: {0}")]
     #[diagnostic(code(bridge::bridge_not_found))]
@@ -52,512 +63,501 @@ pub enum BridgeApiError {
     #[diagnostic(
         code(bridge::bridge_not_found),
         help(
-            "The bridge set path sould be a directory that contains bridges (directories that contains lua scripts)"
+            "The bridge set path should be a directory that contains bridges (directories that contains executable scripts)"
         )
     )]
     BridgeSetPathAreNotADirectory(PathBuf),
 
-    #[error("Bridge is missing return table: {0}.\nlua error: {1}")]
-    #[diagnostic(
-        code(bridge::bridge_missing_return_table),
-        help(
-            "The bridge should return a table with the install function and optionally the remove and update functions"
-        )
-    )]
-    BridgeMissingReturnTable(PathBuf, mlua::Error),
-
-    #[error("Bridge {0} is missing a function: {1}.\nlua error: {2}")]
-    #[diagnostic(
-        code(bridge::bridge_missing_function),
-        help("the install, remove and update functions are required in the bridge return table")
-    )]
-    BridgeMissingFunction(PathBuf, String, mlua::Error),
-
-    #[error("Unsupported attribute type {0}")]
-    #[diagnostic(code(bridge::wrong_value))]
-    UnSupportedAttributeType(String),
-
-    #[error("Bridge is missing return a pkg_name")]
-    #[diagnostic(code(bridge::missing_pkg_name))]
-    MissingPkgName,
-
-    #[error("Bridge is missing return a pkg_version")]
-    #[diagnostic(code(bridge::missing_pkg_version))]
-    MissingPkgVersion,
-
-    #[error("Bridge is missing return a pkg_path")]
-    #[diagnostic(code(bridge::missing_pkg_path))]
-    MissingPkgPath,
-
-    #[error("Bridge is missing return a pkg_path")]
-    #[diagnostic(code(bridge::db_error))]
-    DbError,
-
     #[error("Bridge returned an error: {0}")]
-    #[diagnostic(code(bridge::lua_error))]
+    #[diagnostic(code(bridge::bridge_error))]
     BridgeError(String),
 
-    #[error("Bridge returned an invalid pkg path: {0}")]
-    #[diagnostic(code(bridge::bridge_returned_un_valid_pkg_path))]
-    BridgeReturnedUnValidPkgPath(PathBuf),
+    #[error("Bridge entry point is not executable: {0}")]
+    #[diagnostic(
+        code(bridge::bridge_entry_point_not_executable),
+        help("Try: `chmod +x <entry_point>`")
+    )]
+    BridgeEntryPointNotExecutable(PathBuf),
 
-    #[error("Bridge returned an invalid pkg path as entry point: {0}")]
-    #[diagnostic(code(bridge::entry_point_not_found))]
-    BridgeReturnedUnValidPkgPathAsEntryPoint(PathBuf),
+    #[error("Bridge returned a wrong output: {0}")]
+    #[diagnostic(
+        code(bridge::bridge_wrong_output),
+        help(
+            "Bridge output should be a new line separated list of three elements: pkg_path,pkg_version,pkg_entry_point(if pkg type is 'Directory')"
+        )
+    )]
+    BridgeWrongOutput(String),
+
+    #[error("Bridge failed at runtime, error: {0}")]
+    #[diagnostic(code(bridge::bridge_failed))]
+    BridgeFailedAtRuntime(String),
+
+    #[error("Bridge returned a wrong version format: {0}")]
+    #[diagnostic(
+        code(bridge::bridge_wrong_version_format),
+        help(
+            "Version format should be three integers (can be strings but not recommended) separated by a dot '.'"
+        )
+    )]
+    BridgeWrongVersionFormat(String),
+
+    #[error("Bridge returned not valid path: {0}")]
+    #[diagnostic(code(bridge::bridge_wrong_path))]
+    BridgeNotValid(PathBuf),
+
+    #[error("Bridge returned not valid entry point: {0}")]
+    #[diagnostic(code(bridge::bridge_wrong_entry_point))]
+    BridgeNotValidEntryPoint(PathBuf),
+
+    #[error("Failed to create log file: {0}")]
+    #[diagnostic(code(bridge::bridge_failed_to_create_log_file))]
+    BridgeFailedToCreateLogFile(String),
+
+    #[error("Failed to open log file: {0}")]
+    #[diagnostic(code(bridge::bridge_failed_to_open_log_file))]
+    BridgeFailedToOpenLogFile(String),
 }
 
-fn get_bridges_paths(bridge_set_path: PathBuf) -> Result<Vec<PathBuf>> {
-    if !bridge_set_path.exists() {
-        return Err(BridgeApiError::BridgeSetNotFound(bridge_set_path).into());
-    };
+mod default_impls {
+    use std::path::PathBuf;
 
-    if !bridge_set_path.is_dir() {
-        return Err(BridgeApiError::BridgeSetPathAreNotADirectory(bridge_set_path).into());
-    }
-
-    let content = bridge_set_path
-        .read_dir()
-        .map_err(BridgeApiError::IoError)?;
-
-    let mut bridges_paths = Vec::<PathBuf>::new();
-
-    for file in content {
-        let file = file.map_err(BridgeApiError::IoError)?;
-
-        if file.file_type().map_err(BridgeApiError::IoError)?.is_dir() {
-            let bridge_dir = file.path();
-
-            let main_lua_path = bridge_dir.join("main.lua");
-            if main_lua_path.exists() && main_lua_path.is_file() {
-                bridges_paths.push(main_lua_path);
+    use miette::{IntoDiagnostic, Result};
+    pub fn remove() -> Result<bool> {
+        let pkg_path = std::env::var("pkg_path").unwrap();
+        let mut removed = false;
+        if PathBuf::from(&pkg_path).exists() {
+            if PathBuf::from(&pkg_path).is_dir() {
+                std::fs::remove_dir_all(&pkg_path).into_diagnostic()?;
+            } else {
+                std::fs::remove_file(&pkg_path).into_diagnostic()?;
             }
+            removed = true;
+        }
+        Ok(removed)
+    }
+}
+
+// NOTE: unix only
+fn is_executable(path: &PathBuf) -> Result<bool> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = path.metadata().into_diagnostic()?;
+    let permissions = metadata.permissions();
+    Ok(permissions.mode() & 0o111 != 0) // Check if any execute bit is set
+}
+
+impl Operation {
+    pub fn display(&self) -> String {
+        match self {
+            Operation::Install => "install".to_string(),
+            Operation::Update => "update".to_string(),
+            Operation::Remove => "remove".to_string(),
         }
     }
-
-    Ok(bridges_paths)
-}
-
-fn setup_working_directory(bridge_name: &str, pkg: &PkgDeclaration) -> Result<PathBuf> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let tmp_dir_base = PathBuf::from(DEFAULT_WORKING_DIR)
-        .join(bridge_name)
-        .join(&pkg.name);
-
-    let tmp_dir = loop {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-
-        let tmp_dir = tmp_dir_base.join(format!("{timestamp}"));
-
-        if !tmp_dir.exists() {
-            break tmp_dir;
-        }
-    };
-
-    // Create the directory
-    std::fs::create_dir_all(&tmp_dir).into_diagnostic()?;
-
-    // Change to the directory
-    std::env::set_current_dir(&tmp_dir).into_diagnostic()?;
-
-    Ok(tmp_dir)
-}
-
-fn get_bridges(
-    lua: &Lua,
-    bridges_paths: &[PathBuf],
-    needed_bridges: &[String],
-) -> Result<Vec<LuaBridgeImplementation>> {
-    let mut bridges = Vec::<LuaBridgeImplementation>::new();
-
-    for bridge_path in bridges_paths {
-        let bridge_name = bridge_path
-            .parent()
-            .ok_or(BridgeApiError::MissingMainDotLuaFile)? //FIXME: use io error
-            .file_stem()
-            .ok_or(BridgeApiError::MissingMainDotLuaFile)?
-            .to_str()
-            .ok_or(BridgeApiError::MissingMainDotLuaFile)?
-            .to_string();
-
-        if !needed_bridges.contains(&bridge_name) {
-            continue;
-        }
-
-        let lua_code = std::fs::read_to_string(bridge_path).map_err(BridgeApiError::IoError)?;
-
-        let bridge_table: LuaTable = lua.load(&lua_code).eval::<LuaTable>().map_err(|lua_err| {
-            BridgeApiError::BridgeMissingReturnTable(bridge_path.clone(), lua_err)
-        })?;
-
-        let install_fn: LuaFunction = bridge_table.get("install").map_err(|lua_err| {
-            BridgeApiError::BridgeMissingFunction(
-                bridge_path.clone(),
-                "install".to_string(),
-                lua_err,
-            )
-        })?;
-
-        // Create remove function
-        let remove = lua
-            .create_function(
-                |_lua: &Lua, (_input, opts): (String, LuaTable)| -> LuaResult<bool> {
-                    let pkg_path = opts.get::<String>("pkg_path")?;
-                    let mut removed = false;
-                    if PathBuf::from(&pkg_path).exists() {
-                        if PathBuf::from(&pkg_path).is_dir() {
-                            std::fs::remove_dir_all(&pkg_path)?;
-                        } else {
-                            std::fs::remove_file(&pkg_path)?;
-                        }
-                        removed = true;
-                    }
-                    Ok(removed)
-                },
-            )
-            .into_diagnostic()?;
-
-        let bridge_table_clone = bridge_table.clone();
-        let update = lua
-            .create_function(
-                move |_: &Lua, (input, opts): (String, LuaTable)| -> LuaResult<LuaTable> {
-                    // Get the install function from the bridge table each time
-                    let install_fn: LuaFunction =
-                        bridge_table_clone.get("install").map_err(|e| {
-                            mlua::Error::RuntimeError(format!("Missing install function: {}", e))
-                        })?;
-
-                    let output = install_fn.call::<LuaTable>((input, opts.clone()))?;
-
-                    if let Ok(error) = output.get::<String>("error") {
-                        return Err(mlua::Error::RuntimeError(error));
-                    }
-
-                    let pkg_path = opts.get::<String>("pkg_path")?;
-
-                    if PathBuf::from(&pkg_path).exists() {
-                        if PathBuf::from(&pkg_path).is_dir() {
-                            std::fs::remove_dir_all(&pkg_path)?;
-                        } else {
-                            std::fs::remove_file(&pkg_path)?;
-                        }
-                    }
-
-                    Ok(output)
-                },
-            )
-            .into_diagnostic()?;
-
-        let log_file =
-            std::path::PathBuf::from(format!("{}/{}.log", &DEFAULT_LOG_DIR, &bridge_name));
-
-        let bridge_name_copy = bridge_name.clone();
-
-        // Try to create the directory, but don't panic if it fails
-        let _ = std::fs::create_dir_all(log_file.parent().unwrap());
-
-        let print = lua
-            .create_function(move |_: &Lua, input: String| -> LuaResult<()> {
-                // Try to create the log file, but if it fails, just print to stderr
-                match std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&log_file)
-                {
-                    Ok(mut file) => {
-                        if let Err(e) = file.write_all(input.as_bytes()) {
-                            eprintln!("Failed to write to log file {}: {}", log_file.display(), e);
-                        }
-                        if let Err(e) = file.write_all(b"\n") {
-                            eprintln!("Failed to write newline to log file: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        // Fall back to stderr if we can't create the log file
-                        eprintln!("[LOG - {}] {}", &bridge_name_copy, input);
-                        eprintln!("(Could not create log file {}: {})", log_file.display(), e);
-                    }
-                }
-                Ok(())
-            })
-            .into_diagnostic()?;
-
-        lua.globals().set("print", print).into_diagnostic()?;
-
-        let remove_fn: LuaFunction = bridge_table.get("remove").unwrap_or(remove);
-        let update_fn: LuaFunction = bridge_table.get("update").unwrap_or(update);
-
-        bridges.push(LuaBridgeImplementation {
-            install_fn,
-            remove_fn,
-            update_fn,
-            name: bridge_name,
-        });
-    }
-
-    Ok(bridges)
-}
-
-fn get_bridge(
-    bridges: &[LuaBridgeImplementation],
-    target: &str,
-) -> Result<LuaBridgeImplementation, BridgeApiError> {
-    let bridge = bridges
-        .iter()
-        .find(|bridge| bridge.name == target)
-        .ok_or(BridgeApiError::BridgeNotFound(target.to_string()))?
-        .clone();
-
-    Ok(bridge)
-}
-
-fn parse_attributes(
-    bridge_api: &BridgeApi,
-    attributes: &HashMap<String, input::AttributeValue>,
-    pkg_name: String,
-    bridge_name: &str,
-) -> Result<LuaTable, BridgeApiError> {
-    let table = bridge_api
-        .lua
-        .create_table()
-        .map_err(BridgeApiError::LuaError)?;
-
-    for (key, value) in attributes {
-        let _ = match value {
-            input::AttributeValue::String(value) => table.set(key.clone(), value.clone()),
-            input::AttributeValue::Integer(value) => {
-                table.set(key.clone(), mlua::Integer::from(*value))
-            }
-            input::AttributeValue::Float(value) => {
-                table.set(key.clone(), mlua::Number::from(*value))
-            }
-            input::AttributeValue::Boolean(value) => table.set(key.clone(), *value),
-        };
-    }
-
-    let pkg_path = bridge_api
-        .db
-        .get_pkgs_by_name(&[pkg_name])
-        .map_err(|_| BridgeApiError::DbError)?
-        .first()
-        .ok_or(BridgeApiError::MissingPkgPath)?
-        .path
-        .clone();
-
-    let log_file = format!("{}/{}.log", &DEFAULT_LOG_DIR, &bridge_name);
-
-    let _ = table.set(
-        "pkg_path".to_string(),
-        pkg_path.to_string_lossy().into_owned(),
-    );
-
-    let _ = table.set("log_file".to_string(), log_file.to_string());
-
-    Ok(table)
-}
-
-fn convert_lua_table_to_pkg(lua_table: LuaTable, pkg_name: &str) -> Result<Pkg> {
-    let pkg_name = pkg_name.to_string().clone();
-
-    let lua_error = lua_table.get::<String>("error");
-    if let Ok(error) = lua_error {
-        return Err(BridgeApiError::BridgeError(error).into());
-    }
-
-    let pkg_version = lua_table
-        .get::<String>("version")
-        .map_err(|_| BridgeApiError::MissingPkgVersion)?;
-    let pkg_path = lua_table
-        .get::<String>("path")
-        .map_err(|_| BridgeApiError::MissingPkgPath)?;
-    let pkg_type = lua_table.get::<String>("entry_point");
-    let pkg_type = if let Ok(entry_point) = pkg_type {
-        PkgType::Directory(PathBuf::from(entry_point))
-    } else {
-        PkgType::SingleExecutable
-    };
-
-    let pkg_version = pkg_version
-        .split('.')
-        .map(|s| s.parse::<String>().unwrap())
-        .collect::<Vec<String>>();
-
-    let pkg_version = PkgVersion {
-        first_cell: pkg_version[0].clone(),
-        second_cell: pkg_version[1].clone(),
-        third_cell: pkg_version[2].clone(),
-    };
-
-    let mut pkg_path = PathBuf::from(pkg_path);
-
-    // get the absolute path of the pkg_path
-    if pkg_path.is_relative() {
-        pkg_path = std::env::current_dir().into_diagnostic()?.join(pkg_path);
-    }
-
-    if !pkg_path.exists() {
-        return Err(BridgeApiError::BridgeReturnedUnValidPkgPath(pkg_path)).into_diagnostic()?;
-    }
-
-    let pkg_type = if let PkgType::Directory(ref entry_point) = pkg_type {
-        // get the absolute path of the entry_point
-        let entry_point = if entry_point.is_relative() {
-            std::env::current_dir().into_diagnostic()?.join(entry_point)
-        } else {
-            entry_point.clone()
-        };
-
-        if !entry_point.exists() {
-            return Err(BridgeApiError::BridgeReturnedUnValidPkgPathAsEntryPoint(
-                entry_point.clone(),
-            ))
-            .into_diagnostic()?;
-        }
-        PkgType::Directory(entry_point)
-    } else {
-        pkg_type
-    };
-
-    Ok(Pkg {
-        name: pkg_name,
-        version: pkg_version,
-        path: pkg_path,
-        pkg_type,
-    })
 }
 
 impl BridgeApi {
     pub fn new(
         bridge_set_path: PathBuf,
-        needed_bridges: Vec<String>,
+        needed_bridges: &Vec<String>,
         db_path: &PathBuf,
     ) -> Result<Self> {
-        let bridge_set_dir_content = get_bridges_paths(bridge_set_path.clone())?;
-        let lua = Lua::new();
-
-        // FIXME: use an env var to set the lua modules path
-        let pkg_lua_module_path = std::env::var("PKG_LUA_MODULE_PATH").unwrap_or("".to_string());
-
-        // Set global package path for all bridges
-        let lua_modules_path = &bridge_set_path
-            .join(&pkg_lua_module_path)
-            .join("lua_modules")
-            .join("share")
-            .join("lua")
-            .join("5.4")
-            .join("?.lua");
-
-        let lua_modules_cpath = &bridge_set_path
-            .join(&pkg_lua_module_path)
-            .join("lua_modules")
-            .join("lib")
-            .join("lua")
-            .join("5.4")
-            .join("?.so");
-
-        let package_path = format!(
-            "{};{}/?.lua",
-            lua_modules_path.to_string_lossy(),
-            &bridge_set_path.to_string_lossy()
-        );
-
-        let package_cpath = format!(
-            "{};{}/?.so",
-            lua_modules_cpath.to_string_lossy(),
-            &bridge_set_path.to_string_lossy()
-        );
-
-        lua.load(format!(
-            r#"
-            package.path = "{};" .. package.path
-            package.cpath = "{};" .. package.cpath
-        "#,
-            package_path, package_cpath
-        ))
-        .exec()
-        .map_err(BridgeApiError::LuaError)?;
-
-        let bridges = get_bridges(&lua, &bridge_set_dir_content, &needed_bridges)?;
+        let bridges = Self::load_bridges(&bridge_set_path, needed_bridges)?;
 
         let db = Db::new(db_path)?;
 
-        Ok(Self {
-            lua,
-            needed_bridges,
-            bridges,
-            db,
-        })
+        Ok(Self { bridges, db })
     }
 
-    pub fn install(&self, bridge_name: &str, pkg: &input::PkgDeclaration) -> Result<Pkg> {
-        let bridge = get_bridge(&self.bridges, bridge_name)?;
+    pub fn run_operation(
+        &self,
+        bridge_name: &str,
+        pkg: &PkgDeclaration,
+        operation: Operation,
+    ) -> Result<Option<Pkg>> {
+        let bridge_entry_point = &self
+            .bridges
+            .iter()
+            .find(|b| b.name == bridge_name)
+            .ok_or(BridgeApiError::BridgeNotFound(bridge_name.to_string()))?
+            .entry_point;
 
-        setup_working_directory(bridge_name, pkg)?;
+        Self::setup_working_directory(bridge_name, &pkg.name)?;
 
         let input = pkg.input.to_string();
         let attributes = &pkg.attributes;
-        let table = self.lua.create_table().map_err(BridgeApiError::LuaError)?;
 
-        for (key, value) in attributes {
-            let _ = match value {
-                input::AttributeValue::String(value) => table.set(key.clone(), value.clone()),
-                input::AttributeValue::Integer(value) => {
-                    table.set(key.clone(), mlua::Integer::from(*value))
-                }
-                input::AttributeValue::Float(value) => {
-                    table.set(key.clone(), mlua::Number::from(*value))
-                }
-                input::AttributeValue::Boolean(value) => table.set(key.clone(), *value),
-            };
+        let log_file = PathBuf::from(format!("{}/{}.log", &DEFAULT_LOG_DIR, &bridge_name));
+
+        let log_file_parent = log_file.parent().unwrap();
+        let _ = std::fs::create_dir_all(log_file_parent)
+            .map_err(|err| BridgeApiError::BridgeFailedToCreateLogFile(err.to_string()));
+        if !log_file.exists() {
+            std::fs::File::create(&log_file)
+                .map_err(|err| BridgeApiError::BridgeFailedToCreateLogFile(err.to_string()))?;
         }
 
-        let log_file = format!("{}/{}.log", &DEFAULT_LOG_DIR, &bridge_name);
+        let mut pkg_path = None;
 
-        let _ = table.set("log_file".to_string(), log_file.to_string());
+        if (operation == Operation::Update) || (operation == Operation::Remove) {
+            pkg_path = self
+                .db
+                .get_pkgs_by_name(std::slice::from_ref(&pkg.name))?
+                .first()
+                .map(|p| p.path.clone());
+            // NOTE: this is good to do not break if
+            // some thing is wrong or db is manually modified, but it's not returned
+            // the correct result
+        }
 
-        let attributes = table;
+        Self::pass_opts_to_env(attributes, pkg_path, &log_file.to_string_lossy())?;
 
-        let bridge_output = bridge
-            .install_fn
-            .call::<LuaTable>((input, attributes))
-            .map_err(BridgeApiError::LuaError)?;
+        let mut bridge = process::Command::new(bridge_entry_point);
+        bridge.arg(operation.display());
+        bridge.arg(input.clone());
 
-        convert_lua_table_to_pkg(bridge_output, &pkg.name)
+        let bridge_output = bridge.output();
+
+        let mut log_file_handle = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_file)
+            .map_err(|err| BridgeApiError::BridgeFailedToOpenLogFile(err.to_string()))?;
+
+        // Write stdout to log
+        if let Ok(output) = &bridge_output {
+            log_file_handle
+                .write_all(format!("|PKG={}|:::::::\n", &pkg.name).as_bytes())
+                .into_diagnostic()?;
+            log_file_handle
+                .write_all("|STDOUT|::::::::\n".as_bytes())
+                .into_diagnostic()?;
+            log_file_handle
+                .write_all(&output.stdout)
+                .into_diagnostic()?;
+            log_file_handle.write_all(b"\n").into_diagnostic()?;
+            log_file_handle
+                .write_all("|STDERR|::::::::\n".as_bytes())
+                .into_diagnostic()?;
+            log_file_handle
+                .write_all(&output.stderr)
+                .into_diagnostic()?;
+            log_file_handle.write_all(b"\n").into_diagnostic()?;
+        }
+
+        match bridge_output {
+            Ok(output) => {
+                // Bridge command succeeded
+                match operation {
+                    Operation::Install => {
+                        let parsed_output = Self::parse_bridge_output(output)?;
+                        let pkg = Pkg {
+                            name: pkg.name.clone(),
+                            version: parsed_output.version,
+                            path: parsed_output.pkg_path,
+                            pkg_type: parsed_output.pkg_type,
+                        };
+                        Ok(Some(pkg))
+                    }
+                    Operation::Update => {
+                        let success = output.status.success();
+                        let stderr = String::from_utf8(output.stderr.clone()).into_diagnostic()?;
+                        let stderr = stderr.trim();
+
+                        let output = if !success
+                            && output.status.code().unwrap() == 1
+                            && stderr == "__IMPL_DEFAULT"
+                        {
+                            let _ = default_impls::remove()?;
+
+                            let result = process::Command::new(bridge_entry_point)
+                                .arg(Operation::Install.display())
+                                .arg(input.clone())
+                                .output();
+
+                            result.into_diagnostic()?
+                        } else {
+                            output
+                        };
+
+                        let parsed_output = Self::parse_bridge_output(output)?;
+                        let pkg = Pkg {
+                            name: pkg.name.clone(),
+                            version: parsed_output.version,
+                            path: parsed_output.pkg_path,
+                            pkg_type: parsed_output.pkg_type,
+                        };
+                        Ok(Some(pkg))
+                    }
+                    Operation::Remove => {
+                        let success = output.status.success();
+                        let stderr = String::from_utf8(output.stderr).into_diagnostic()?;
+                        let stderr = stderr.trim();
+
+                        if !success // if it failed
+                            && output.status.code().unwrap() == 1 // and return 1
+                            && stderr == "__IMPL_DEFAULT"
+                        // and print the the
+                        // stderr __IMPL_DEFAULT
+                        // a log right
+                        {
+                            default_impls::remove()?;
+                        } else {
+                            return Err(BridgeApiError::BridgeError(stderr.to_string()).into());
+                        }
+                        Ok(None)
+                    }
+                }
+            }
+            Err(err) => Err(BridgeApiError::BridgeFailedAtRuntime(err.to_string()).into()),
+        }
     }
 
-    pub fn remove(&self, bridge_name: &str, pkg: &input::PkgDeclaration) -> Result<bool> {
-        let bridge = get_bridge(&self.bridges, bridge_name)?;
-
-        setup_working_directory(bridge_name, pkg)?;
-
-        let input = pkg.input.to_string();
-
-        let attributes = parse_attributes(self, &pkg.attributes, pkg.name.clone(), bridge_name)?;
-
-        let bridge_output = bridge
-            .remove_fn
-            .call::<bool>((input, attributes))
-            .map_err(BridgeApiError::LuaError)?;
-
-        Ok(bridge_output)
+    pub fn install(&self, bridge_name: &str, pkg: &PkgDeclaration) -> Result<Pkg> {
+        self.run_operation(bridge_name, pkg, Operation::Install)
+            .map(|p| p.unwrap())
     }
 
-    pub fn update(&self, bridge_name: &str, pkg: &input::PkgDeclaration) -> Result<Pkg> {
-        let bridge = get_bridge(&self.bridges, bridge_name)?;
+    pub fn update(&self, bridge_name: &str, pkg: &PkgDeclaration) -> Result<Pkg> {
+        self.run_operation(bridge_name, pkg, Operation::Update)
+            .map(|p| p.unwrap())
+    }
 
-        setup_working_directory(bridge_name, pkg)?;
+    pub fn remove(&self, bridge_name: &str, pkg: &PkgDeclaration) -> Result<bool> {
+        let res = self.run_operation(bridge_name, pkg, Operation::Remove)?;
+        Ok(res.is_none())
+    }
 
-        let input = pkg.input.to_string();
-        let attributes = parse_attributes(self, &pkg.attributes, pkg.name.clone(), bridge_name)?;
+    fn parse_bridge_output(bridge_output: Output) -> Result<BridgeOutput> {
+        const BRIDGE_OUTPUT_SEPARATOR: char = ',';
+        const VERSION_SEPARATOR: char = '.';
 
-        let bridge_output = bridge
-            .update_fn
-            .call::<LuaTable>((input, attributes))
-            .map_err(BridgeApiError::LuaError)?;
+        if !bridge_output.status.success() {
+            return Err(BridgeApiError::BridgeError(
+                String::from_utf8(bridge_output.stderr)
+                    .unwrap_or("failed to parse bridge output".to_string()),
+            ))?;
+        }
 
-        convert_lua_table_to_pkg(bridge_output, &pkg.name)
+        // to string
+        let bridge_output = String::from_utf8(bridge_output.stdout).into_diagnostic()?;
+
+        // get the first line of the bridge output
+        let first_line =
+            bridge_output
+                .lines()
+                .next()
+                .ok_or(BridgeApiError::IoError(std::io::Error::other(
+                    "Wrong bridge output, no thing is returned",
+                )))?;
+
+        let first_line = first_line.trim();
+
+        let split = first_line
+            .split(BRIDGE_OUTPUT_SEPARATOR)
+            .collect::<Vec<&str>>();
+
+        let pkg_path;
+        let version;
+        let pkg_type;
+
+        if split.len() > 3 || split.len() < 2 {
+            return Err(BridgeApiError::BridgeWrongOutput(bridge_output))?;
+        } else {
+            pkg_path = PathBuf::from(split.first().unwrap().to_string());
+            let version_str = split.get(1).unwrap().to_string();
+            pkg_type = match split.get(2) {
+                Some(entry_point) => PkgType::Directory(PathBuf::from(entry_point)),
+                None => PkgType::SingleExecutable,
+            };
+
+            let version_split = version_str.split(VERSION_SEPARATOR).collect::<Vec<&str>>();
+
+            if version_split.len() != 3 {
+                return Err(BridgeApiError::BridgeWrongVersionFormat(version_str))?;
+            } else {
+                version = PkgVersion {
+                    first_cell: version_split[0].to_string(),
+                    second_cell: version_split[1].to_string(),
+                    third_cell: version_split[2].to_string(),
+                };
+            }
+        }
+
+        let pwd = std::env::current_dir().into_diagnostic()?;
+
+        let pkg_path = if pkg_path.is_relative() {
+            pwd.join(pkg_path)
+        } else {
+            pkg_path
+        };
+
+        let pkg_type = match pkg_type {
+            PkgType::Directory(path) => {
+                let path = if !path.is_relative() {
+                    pwd.join(path)
+                } else {
+                    path
+                };
+                PkgType::Directory(path)
+            }
+            _ => pkg_type,
+        };
+
+        if !pkg_path.exists() {
+            return Err(BridgeApiError::BridgeNotValid(pkg_path))?;
+        }
+
+        if let PkgType::Directory(path) = &pkg_type
+            && !path.exists()
+        {
+            return Err(BridgeApiError::BridgeNotValidEntryPoint(path.clone()))?;
+        }
+
+        Ok(BridgeOutput {
+            version,
+            pkg_path,
+            pkg_type,
+        })
+    }
+
+    fn load_bridges(
+        bridge_set_path: &PathBuf,
+        needed_bridges: &Vec<String>,
+    ) -> Result<Vec<Bridge>> {
+        const BRIDGE_ENTRY_POINT_NAME: &str = "run";
+
+        if !bridge_set_path.exists() {
+            return Err(BridgeApiError::BridgeSetNotFound(bridge_set_path.clone()).into());
+        };
+
+        if !bridge_set_path.is_dir() {
+            return Err(
+                BridgeApiError::BridgeSetPathAreNotADirectory(bridge_set_path.clone()).into(),
+            );
+        }
+
+        let content = bridge_set_path
+            .read_dir()
+            .map_err(BridgeApiError::IoError)?;
+
+        let mut bridges = Vec::<Bridge>::new();
+
+        for file in content {
+            let file = file.map_err(BridgeApiError::IoError)?;
+
+            if file.file_type().map_err(BridgeApiError::IoError)?.is_dir() {
+                let bridge_dir = file.path();
+                let bridge_name = bridge_dir
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+
+                if !needed_bridges.contains(&bridge_name) {
+                    continue;
+                }
+
+                let entry_point_path = bridge_dir.join(BRIDGE_ENTRY_POINT_NAME);
+                if entry_point_path.exists() && entry_point_path.is_file() {
+                    if !is_executable(&entry_point_path)? {
+                        Err(BridgeApiError::BridgeEntryPointNotExecutable(
+                            entry_point_path.clone(),
+                        ))?;
+                    }
+
+                    bridges.push(Bridge {
+                        name: bridge_name,
+                        entry_point: entry_point_path,
+                    });
+                }
+            }
+        }
+
+        let missing_bridges = needed_bridges
+            .iter()
+            .filter(|b| !bridges.iter().any(|bridge| &bridge.name == *b))
+            .cloned()
+            .collect::<Vec<String>>();
+
+        if !missing_bridges.is_empty() {
+            return Err(BridgeApiError::BridgeNotFound(
+                missing_bridges.first().unwrap().to_string(),
+            )
+            .into());
+        }
+
+        Ok(bridges)
+    }
+
+    fn pass_opts_to_env(
+        attributes: &HashMap<String, input::AttributeValue>,
+        pkg_path: Option<PathBuf>,
+        log_file: &str,
+    ) -> Result<(), BridgeApiError> {
+        unsafe {
+            if let Some(path) = pkg_path {
+                if env::var("pkg_path").is_ok() {
+                    env::remove_var("pkg_path");
+                }
+                env::set_var("pkg_path", path);
+            }
+
+            if env::var("pkg_log_file").is_ok() {
+                env::remove_var("pkg_log_file");
+            }
+            env::set_var("pkg_log_file", log_file);
+        }
+
+        for (key, value) in attributes {
+            let value = match value {
+                input::AttributeValue::String(value) => value.to_string(),
+                input::AttributeValue::Integer(value) => value.to_string(),
+                input::AttributeValue::Float(value) => value.to_string(),
+                input::AttributeValue::Boolean(value) => value.to_string(),
+            };
+
+            if env::var(key).is_ok() {
+                unsafe {
+                    env::remove_var(key);
+                }
+            }
+
+            unsafe {
+                env::set_var(key, value);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn setup_working_directory(bridge_name: &str, pkg_name: &str) -> Result<PathBuf> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let tmp_dir_base = PathBuf::from(DEFAULT_WORKING_DIR)
+            .join(bridge_name)
+            .join(pkg_name);
+
+        let tmp_dir = loop {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+
+            let tmp_dir = tmp_dir_base.join(format!("{timestamp}"));
+
+            if !tmp_dir.exists() {
+                break tmp_dir;
+            }
+        };
+
+        // Create the directory
+        std::fs::create_dir_all(&tmp_dir).into_diagnostic()?;
+
+        // Change to the directory
+        std::env::set_current_dir(&tmp_dir).into_diagnostic()?;
+
+        Ok(tmp_dir)
     }
 }

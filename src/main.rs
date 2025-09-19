@@ -46,9 +46,13 @@ fn main() -> Result<()> {
 
     let input = input::Input::load(&inputs_path)?;
 
-    let needed_bridges = input.bridges.iter().map(|b| b.name.clone()).collect();
+    let needed_bridges = input
+        .bridges
+        .iter()
+        .map(|b| b.name.clone())
+        .collect::<Vec<String>>();
 
-    let bridge_api = bridge::BridgeApi::new(bridges_set, needed_bridges, &db_path)?;
+    let bridge_api = bridge::BridgeApi::new(bridges_set, &needed_bridges, &db_path)?;
 
     let fs = fs::Fs::new(target_dir, load_path, &db_path);
 
@@ -110,6 +114,13 @@ fn main() -> Result<()> {
                 ]);
 
             print_stdout(table).into_diagnostic()?;
+            Ok(())
+        }
+        Commands::Docs => {
+            println!("in the name of Allah");
+            let docs = include_str!("../docs/user.md");
+            println!("{}", docs);
+
             Ok(())
         }
         _ => {
@@ -228,7 +239,8 @@ fn main() -> Result<()> {
                                     return Err(remove_result.err().unwrap());
                                 }
 
-                                let db_remove_result = db.remove_pkgs(&[pkg.name.clone()]);
+                                let db_remove_result =
+                                    db.remove_pkgs(std::slice::from_ref(&pkg.name));
                                 if let Err(db_err) = db_remove_result {
                                     pb.finish_with_message(format!(
                                         "❌ {},{}: {}",
@@ -321,8 +333,9 @@ fn main() -> Result<()> {
                                     continue;
                                 }
 
-                                let db_res =
-                                    db.remove_pkgs(&[pkg_name.clone()]).inspect_err(|err| {
+                                let db_res = db
+                                    .remove_pkgs(std::slice::from_ref(&pkg_name))
+                                    .inspect_err(|err| {
                                         pb.finish_with_message(format!(
                                             "❌ {}, {}: {}",
                                             &pkg_name.red().bold(),

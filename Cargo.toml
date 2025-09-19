@@ -2,9 +2,9 @@
 name = "pkg"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
 
 [dependencies]
-mlua = { version = '0.11.2', features = ['vendored', 'lua54', 'async', 'send'] }
 miette = { version = "7.6.0", features = ["fancy"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 thiserror = "2.0.15"

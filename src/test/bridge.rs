@@ -8,7 +8,7 @@ fn init_a_bridge_api() {
 
     let _bridge_api = BridgeApi::new(
         bridge_set_path,
-        vec!["bridge1".to_string()],
+        &vec!["bridge1".to_string()],
         &PathBuf::from("some/where"),
     )
     .unwrap();

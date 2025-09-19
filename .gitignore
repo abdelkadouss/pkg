@@ -11,3 +11,6 @@
 local.db
 local.db-journal
 *.tmp
+
+# Test
+.tmp
