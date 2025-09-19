@@ -1,7 +1,0 @@
-bridge3 {
-  pkg11 "one" some=stuff
-  pkg12 "two" check=#true
-  pkg13 "three" file="some/path" count=10
-  pkg14 "four" some=stuff
-  pkg15 "five" some=stuff
-}

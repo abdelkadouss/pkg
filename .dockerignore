@@ -1,0 +1,38 @@
+# build artifacts
+target/
+
+# swap files
+*.swp
+*.swo
+
+# IDE files
+.idea/
+.vscode/
+
+# macOS files
+.DS_Store
+.DS_Store?
+
+# Ignore the .env file
+.env
+
+# Ignore the .env.example file
+.env.example
+
+# Keep only the docker examples
+examples/*
+!examples/docker/
+!examples/docker/*
+
+# Ignore the docs directory
+docs/
+
+# Ignore the .git stuff
+.git/
+.gitignore
+.gitmodules
+.gitattributes
+.gitconfig
+
+# Ignore the tests directory
+src/test/
