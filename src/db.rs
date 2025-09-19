@@ -16,7 +16,6 @@ pub enum PkgType {
 
 #[derive(Debug)]
 pub struct Version {
-    // FIXME: use u32 instead of String
     pub first_cell: String,
     pub second_cell: String,
     pub third_cell: String,
@@ -102,6 +101,9 @@ impl Pkg {
 
 impl Db {
     pub fn new(path: &PathBuf) -> Result<Self> {
+        let parent = path.parent().ok_or(DbError::InvalidPath)?;
+        std::fs::create_dir_all(parent).into_diagnostic()?;
+
         let conn = Connection::open(path).into_diagnostic()?;
 
         conn.execute(sql::CREATE_PKGS_TABLE, []).into_diagnostic()?;
