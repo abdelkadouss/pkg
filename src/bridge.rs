@@ -394,7 +394,7 @@ impl BridgeApi {
 
         let pkg_type = match pkg_type {
             PkgType::Directory(path) => {
-                let path = if !path.is_relative() {
+                let path = if path.is_relative() {
                     pwd.join(path)
                 } else {
                     path

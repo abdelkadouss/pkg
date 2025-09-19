@@ -2,4 +2,5 @@ bridge {
   pkg1
   pkg2
   pkg3
+  pkg4 "pkg4" dir=#true
 }

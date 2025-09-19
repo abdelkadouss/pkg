@@ -73,7 +73,7 @@ mod sql {
     "#;
 
     pub const GET_PKGS_BY_NAMES: &str = r#"
-    SELECT name, version, path, pkg_type FROM packages WHERE name IN ({});
+    SELECT name, version, path, pkg_type, entry_point FROM packages WHERE name IN ({});
     "#;
     pub const INSERT_PKGS: &str = r#"
     INSERT INTO packages (name, version, path, pkg_type, entry_point, bridge)
@@ -251,6 +251,7 @@ impl Db {
                 let version: String = row.get(1)?;
                 let path: String = row.get(2)?;
                 let pkg_type: String = row.get(3)?;
+                let entry_point: String = row.get(4)?;
 
                 // Parse version string into components
                 let version_parts: Vec<&str> = version.split('.').collect();
@@ -261,7 +262,7 @@ impl Db {
                 // Parse package type
                 let pkg_type = match pkg_type.as_str() {
                     "SingleExecutable" => PkgType::SingleExecutable,
-                    "Directory" => PkgType::Directory(PathBuf::from(&path)),
+                    "Directory" => PkgType::Directory(PathBuf::from(&entry_point)),
                     _ => return Err(RusqliteError::InvalidQuery),
                 };
 

@@ -97,8 +97,8 @@ fn main() -> Result<()> {
                         pkg.path.display().to_string().cell(),
                         match &pkg.pkg_type {
                             PkgType::SingleExecutable => "executable".to_string(),
-                            PkgType::Directory(path) => {
-                                format!("directory: {}", path.display())
+                            PkgType::Directory(entry_point) => {
+                                format!("directory: {}", entry_point.display())
                             }
                         }
                         .cell(),
