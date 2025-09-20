@@ -17,6 +17,7 @@ use std::{
     io::{self, Write},
     path::PathBuf,
     process::{Command, Stdio, exit},
+    time::Duration,
 };
 
 fn main() -> Result<()> {
@@ -52,7 +53,7 @@ fn main() -> Result<()> {
         .map(|b| b.name.clone())
         .collect::<Vec<String>>();
 
-    let bridge_api = bridge::BridgeApi::new(bridges_set, &needed_bridges, &db_path)?;
+    let bridge_api = bridge::BridgeApi::new(bridges_set.to_path_buf(), &needed_bridges, &db_path)?;
 
     let fs = fs::Fs::new(target_dir, load_path, &db_path);
 
@@ -219,6 +220,7 @@ fn main() -> Result<()> {
                         pb.set_style(spinner_style.clone());
                         pb.set_prefix(format!("[{}/{}]", i + 1, pkgs_count));
                         pb.set_message(format!("🚚 {}", pkg.name));
+                        pb.enable_steady_tick(Duration::from_millis(100));
 
                         let pkg_name = pkg.name.clone();
 
@@ -367,6 +369,87 @@ fn main() -> Result<()> {
 
                         pb.inc(1);
                     }
+                }
+            }
+
+            // hundle the out th serves bridge's pkgs
+            let bridges_in_db = db.get_bridges()?;
+            let bridges_in_input = input
+                .bridges
+                .iter()
+                .map(|b| b.name.clone())
+                .collect::<Vec<String>>();
+
+            let bridges_out_of_service_names = bridges_in_db
+                .iter()
+                .filter(|b| !bridges_in_input.contains(b))
+                .collect::<Vec<&String>>();
+
+            if !bridges_out_of_service_names.is_empty() {
+                hint("Looks like u deprecate some bridges...");
+
+                let mut any_bridge_remove_impl_failed = false;
+
+                for bridge in bridges_out_of_service_names {
+                    let pkgs_to_remove = db.get_pkgs_by_bridge(bridge)?;
+
+                    let m = MultiProgress::new();
+
+                    print_bridge_header(bridge, 0, pkgs_to_remove.len(), 0);
+                    print_job_header("remove");
+
+                    let mut i = 1;
+                    pkgs_to_remove.iter().for_each(|pkg| {
+                        let pb = m.add(ProgressBar::new(100));
+                        pb.set_style(spinner_style.clone());
+                        pb.set_prefix(format!("[{}/{}]", i, pkgs_to_remove.len()));
+                        pb.set_message(format!("🗃️ {}", pkg.name));
+                        pb.enable_steady_tick(Duration::from_millis(100));
+
+                        let removed = if let Ok(bridge_api) = bridge::BridgeApi::new(
+                            bridges_set.clone(),
+                            &vec![bridge.clone()],
+                            &db_path,
+                        ) {
+                            bridge_api
+                                .remove(bridge, &pkg.to_pkg_declaration_with_empty_attributes())
+                                .inspect_err(|_| {
+                                    any_bridge_remove_impl_failed = true;
+                                })
+                        } else {
+                            bridge_api.default_impls_remove(&pkg.name)
+                        };
+
+                        if let Err(err) = removed {
+                            pb.finish_with_message(format!(
+                                "❌ {}, {}: {}",
+                                &pkg.name.red().bold(),
+                                "at bridge operation".red().underline(),
+                                err.red()
+                            ));
+                        } else {
+                            let db_res = db.remove_pkgs(std::slice::from_ref(&pkg.name));
+
+                            let _ = fs.remove_pkgs(std::slice::from_ref(&&pkg.name));
+                            if db_res.is_err() {
+                                pb.finish_with_message(format!(
+                                    "❌ {}, {}: {}",
+                                    &pkg.name.red().bold(),
+                                    "at remove pkg from db".red().underline(),
+                                    db_res.err().unwrap().red()
+                                ));
+                            }
+
+                            i += 1;
+                            pb.inc(1);
+                            pb.finish_with_message(format!("🗑️ {}.", &pkg.name.green().bold()));
+                        }
+                    });
+                }
+                if any_bridge_remove_impl_failed {
+                    hint(
+                        "to use the default remove function impl try to remove the bridge it self or for more info run `pkg docs`",
+                    );
                 }
             }
 
@@ -519,6 +602,10 @@ fn filter_pkgs_by_statuses(
         not_installed_pkgs_in_input,
         installed_pkgs_not_in_input,
     ))
+}
+
+fn hint(msg: &str) {
+    println!("💡 {}", msg.cyan());
 }
 
 fn print_bridge_header(
