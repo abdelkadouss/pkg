@@ -1,6 +1,10 @@
-bridge {
-  pkg1
-  pkg2
-  pkg3
-  pkg4 "pkg4" dir=#true
+// bridge {
+//   pkg1 "pkg1" dir=#true
+//   pkg2
+//   pkg3
+//   pkg4
+// }
+
+bridge1 {
+  pkg5
 }

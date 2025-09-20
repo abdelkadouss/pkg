@@ -85,6 +85,12 @@ mod sql {
     pub const GET_PKG_BRIDGE_BY_NAME: &str = r#"
     SELECT bridge FROM packages WHERE name = ?;
     "#;
+    pub const GET_PKGS_BY_BRIDGE: &str = r#"
+    SELECT name, version, path, pkg_type, entry_point FROM packages WHERE bridge = ?;
+    "#;
+    pub const GET_BRIDGES: &str = r#"
+    SELECT bridge FROM packages GROUP BY bridge;
+    "#;
 }
 
 impl Pkg {
@@ -112,6 +118,23 @@ impl Db {
             conn,
             path: path.clone(),
         })
+    }
+
+    pub fn get_bridges(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(sql::GET_BRIDGES).into_diagnostic()?;
+        let rows = stmt
+            .query_map([], |row| {
+                let bridge: String = row.get(0)?;
+                Ok(bridge)
+            })
+            .into_diagnostic()?;
+
+        let mut bridges = Vec::new();
+
+        for bridge in rows {
+            bridges.push(bridge.into_diagnostic()?);
+        }
+        Ok(bridges)
     }
 
     pub fn get_pkg_bridge_by_name(&self, pkg_name: &str) -> Result<String> {
@@ -247,6 +270,54 @@ impl Db {
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+                let name: String = row.get(0)?;
+                let version: String = row.get(1)?;
+                let path: String = row.get(2)?;
+                let pkg_type: String = row.get(3)?;
+                let entry_point: String = row.get(4)?;
+
+                // Parse version string into components
+                let version_parts: Vec<&str> = version.split('.').collect();
+                if version_parts.len() != 3 {
+                    return Err(RusqliteError::InvalidQuery);
+                }
+
+                // Parse package type
+                let pkg_type = match pkg_type.as_str() {
+                    "SingleExecutable" => PkgType::SingleExecutable,
+                    "Directory" => PkgType::Directory(PathBuf::from(&entry_point)),
+                    _ => return Err(RusqliteError::InvalidQuery),
+                };
+
+                Ok(Pkg {
+                    name,
+                    version: Version {
+                        first_cell: version_parts[0].to_string(),
+                        second_cell: version_parts[1].to_string(),
+                        third_cell: version_parts[2].to_string(),
+                    },
+                    path: PathBuf::from(path),
+                    pkg_type,
+                })
+            })
+            .into_diagnostic()?;
+
+        let mut pkgs = Vec::new();
+        for pkg in rows {
+            pkgs.push(pkg.into_diagnostic()?);
+        }
+
+        Ok(pkgs)
+    }
+
+    pub fn get_pkgs_by_bridge(&self, bridge_name: &String) -> Result<Vec<Pkg>> {
+        let mut stmt = self
+            .conn
+            .prepare(sql::GET_PKGS_BY_BRIDGE)
+            .into_diagnostic()?;
+
+        let rows = stmt
+            .query_map([&bridge_name], |row| {
                 let name: String = row.get(0)?;
                 let version: String = row.get(1)?;
                 let path: String = row.get(2)?;

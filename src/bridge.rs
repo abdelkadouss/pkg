@@ -218,6 +218,8 @@ impl BridgeApi {
 
         let bridge_output = bridge.output();
 
+        Self::clear_env(&attributes.keys().map(|s| s.to_string()).collect())?;
+
         let mut log_file_handle = OpenOptions::new()
             .create(true)
             .append(true)
@@ -227,7 +229,7 @@ impl BridgeApi {
         // Write stdout to log
         if let Ok(output) = &bridge_output {
             log_file_handle
-                .write_all(format!("|PKG={}|:::::::\n", &pkg.name).as_bytes())
+                .write_all(format!("\n|PKG={}|:::::::\n", &pkg.name).as_bytes())
                 .into_diagnostic()?;
             log_file_handle
                 .write_all("|STDOUT|::::::::\n".as_bytes())
@@ -237,7 +239,7 @@ impl BridgeApi {
                 .into_diagnostic()?;
             log_file_handle.write_all(b"\n").into_diagnostic()?;
             log_file_handle
-                .write_all("|STDERR|::::::::\n".as_bytes())
+                .write_all("\n|STDERR|::::::::\n".as_bytes())
                 .into_diagnostic()?;
             log_file_handle
                 .write_all(&output.stderr)
@@ -326,6 +328,22 @@ impl BridgeApi {
     pub fn remove(&self, bridge_name: &str, pkg: &PkgDeclaration) -> Result<bool> {
         let res = self.run_operation(bridge_name, pkg, Operation::Remove)?;
         Ok(res.is_none())
+    }
+
+    pub fn default_impls_remove(&self, pkg_name: &str) -> Result<bool> {
+        let pkg_path = self
+            .db
+            .get_pkgs_by_name(std::slice::from_ref(&pkg_name.to_string()))?
+            .first()
+            .expect("Failed to get pkg from db, can't remove it")
+            .path
+            .clone();
+        unsafe {
+            std::env::set_var("pkg_path", pkg_path);
+        }
+        use default_impls::remove;
+
+        remove()
     }
 
     fn parse_bridge_output(bridge_output: Output) -> Result<BridgeOutput> {
@@ -529,6 +547,17 @@ impl BridgeApi {
             }
         }
 
+        Ok(())
+    }
+
+    fn clear_env(attributes_keys: &Vec<String>) -> Result<()> {
+        for key in attributes_keys {
+            if env::var(key).is_ok() {
+                unsafe {
+                    env::remove_var(key);
+                }
+            }
+        }
         Ok(())
     }
 

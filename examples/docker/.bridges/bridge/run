@@ -9,6 +9,7 @@ def main [operation: string, input: string] {
       },
       "remove" => {
         print -e "__IMPL_DEFAULT"
+        # "he still trying to use me to remove" | save --append $env.pkg_log_file
         exit 1
       }
       _ => {

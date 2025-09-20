@@ -10,7 +10,7 @@ pub enum PkgType {
     Folder(PathBuf),  // the entry point of the package
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AttributeValue {
     String(String),
     Integer(i64),
@@ -18,7 +18,7 @@ pub enum AttributeValue {
     Boolean(bool),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PkgDeclaration {
     pub name: String,
     pub input: String,

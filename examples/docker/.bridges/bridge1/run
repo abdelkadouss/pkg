@@ -1,0 +1,14 @@
+#!/usr/bin/env -S pkgx --quiet +nushell.sh nu@0.107.0
+
+# install to test the progress bar
+def main [operation: string, input: string] {
+  if $operation == "install" {
+    sleep 3sec
+    touch file
+    return "./file,x.x.x"
+    else {
+      print -e "__IMPL_DEFAULT"
+      exit 1
+    }
+  }
+}
