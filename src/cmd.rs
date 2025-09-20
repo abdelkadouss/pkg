@@ -2,7 +2,7 @@ use clap::{ColorChoice, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "pkg")]
-#[command(version = "0.1.0")]
+#[command(version = "0.2.0")]
 #[command(about = "A package manager with Lua bridge support", long_about = None)]
 #[command(color = ColorChoice::Always)] // Always show colors
 pub struct Cli {
