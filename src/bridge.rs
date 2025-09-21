@@ -118,6 +118,35 @@ pub enum BridgeApiError {
     BridgeFailedToOpenLogFile(String),
 }
 
+fn write_logs(pkg_name: &str, log_file: &PathBuf, bridge_output: &Output) -> Result<()> {
+    let mut log_file_handle = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)
+        .map_err(|err| BridgeApiError::BridgeFailedToOpenLogFile(err.to_string()))?;
+
+    // Write stdout to log
+    log_file_handle
+        .write_all(format!("\n|PKG={}|:::::::\n", &pkg_name).as_bytes())
+        .into_diagnostic()?;
+    log_file_handle
+        .write_all("|STDOUT|::::::::\n".as_bytes())
+        .into_diagnostic()?;
+    log_file_handle
+        .write_all(&bridge_output.stdout)
+        .into_diagnostic()?;
+    log_file_handle.write_all(b"\n").into_diagnostic()?;
+    log_file_handle
+        .write_all("\n|STDERR|::::::::\n".as_bytes())
+        .into_diagnostic()?;
+    log_file_handle
+        .write_all(&bridge_output.stderr)
+        .into_diagnostic()?;
+    log_file_handle.write_all(b"\n").into_diagnostic()?;
+
+    Ok(())
+}
+
 mod default_impls {
     use std::path::PathBuf;
 
@@ -220,31 +249,9 @@ impl BridgeApi {
 
         Self::clear_env(&attributes.keys().map(|s| s.to_string()).collect())?;
 
-        let mut log_file_handle = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_file)
-            .map_err(|err| BridgeApiError::BridgeFailedToOpenLogFile(err.to_string()))?;
-
-        // Write stdout to log
+        // Write the log
         if let Ok(output) = &bridge_output {
-            log_file_handle
-                .write_all(format!("\n|PKG={}|:::::::\n", &pkg.name).as_bytes())
-                .into_diagnostic()?;
-            log_file_handle
-                .write_all("|STDOUT|::::::::\n".as_bytes())
-                .into_diagnostic()?;
-            log_file_handle
-                .write_all(&output.stdout)
-                .into_diagnostic()?;
-            log_file_handle.write_all(b"\n").into_diagnostic()?;
-            log_file_handle
-                .write_all("\n|STDERR|::::::::\n".as_bytes())
-                .into_diagnostic()?;
-            log_file_handle
-                .write_all(&output.stderr)
-                .into_diagnostic()?;
-            log_file_handle.write_all(b"\n").into_diagnostic()?;
+            write_logs(&pkg.name, &log_file, output)?;
         }
 
         match bridge_output {
@@ -270,18 +277,20 @@ impl BridgeApi {
                             && output.status.code().unwrap() == 1
                             && stderr == "__IMPL_DEFAULT"
                         {
-                            let result = process::Command::new(bridge_entry_point)
+                            let output = process::Command::new(bridge_entry_point)
                                 .arg(Operation::Install.display())
                                 .arg(input.clone())
                                 .output();
 
-                            if let Ok(result) = &result
-                                && result.status.success()
-                            {
-                                let _ = default_impls::remove()?;
+                            if let Ok(bridge_output) = &output {
+                                write_logs(&pkg.name, &log_file, bridge_output)?;
+
+                                if bridge_output.status.success() {
+                                    let _ = default_impls::remove()?;
+                                }
                             }
 
-                            result.into_diagnostic()?
+                            output.into_diagnostic()?
                         } else {
                             output
                         };
