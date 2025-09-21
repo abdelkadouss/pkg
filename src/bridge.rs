@@ -270,12 +270,16 @@ impl BridgeApi {
                             && output.status.code().unwrap() == 1
                             && stderr == "__IMPL_DEFAULT"
                         {
-                            let _ = default_impls::remove()?;
-
                             let result = process::Command::new(bridge_entry_point)
                                 .arg(Operation::Install.display())
                                 .arg(input.clone())
                                 .output();
+
+                            if let Ok(result) = &result
+                                && result.status.success()
+                            {
+                                let _ = default_impls::remove()?;
+                            }
 
                             result.into_diagnostic()?
                         } else {
