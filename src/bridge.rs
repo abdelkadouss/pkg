@@ -247,8 +247,6 @@ impl BridgeApi {
 
         let bridge_output = bridge.output();
 
-        Self::clear_env(&attributes.keys().map(|s| s.to_string()).collect())?;
-
         // Write the log
         if let Ok(output) = &bridge_output {
             write_logs(&pkg.name, &log_file, output)?;
@@ -257,7 +255,7 @@ impl BridgeApi {
         match bridge_output {
             Ok(output) => {
                 // Bridge command succeeded
-                match operation {
+                let res = match operation {
                     Operation::Install => {
                         let parsed_output = Self::parse_bridge_output(output)?;
                         let pkg = Pkg {
@@ -322,9 +320,17 @@ impl BridgeApi {
                         }
                         Ok(None)
                     }
-                }
+                };
+
+                Self::clear_env(&attributes.keys().map(|s| s.to_string()).collect())?;
+
+                res
             }
-            Err(err) => Err(BridgeApiError::BridgeFailedAtRuntime(err.to_string()).into()),
+            Err(err) => {
+                Self::clear_env(&attributes.keys().map(|s| s.to_string()).collect())?;
+
+                Err(BridgeApiError::BridgeFailedAtRuntime(err.to_string()).into())
+            }
         }
     }
 
