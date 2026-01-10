@@ -13,9 +13,18 @@ Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-
 - 🗃️ full-management of packages insha'Allah install, update, remove support
 
 # Installation
+
+## Note
+
+this program is nix only (linux, mac, bsd*, etc.)
+
 ## Install from crates.io (soon insha'Allah)
 
 todo
+
+## From releases
+
+go to [releases](https://github.com/abdelkadous/pkg/releases) and download the latest release for your system.
 
 ## From source
 
