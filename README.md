@@ -1,6 +1,6 @@
                              بسم الله الرحمن الرحيم
 
-# Pkg - A package manager
+# Pkg 📦 - A package manager
 
 Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-repo yet simple and declarative package manager. In other sed u can insah'Allah insatll packages via pkg from any where insha'Allah in sync with a config files via simple scripts that wrotten in any language on any unix-like machine insha'Allah.
 
@@ -9,7 +9,7 @@ Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-
 - 💻 Platform undependent (works insha'Allah on any unix-like machine)
 - 🧱 written in rust (fast, portable yet simple insha'Allah)
 - 📝 declarative all ur packages are wrtten in files (u have on ur machine what u have in the config files insha'Allah)
-- 📦 multi-repo support (u can write a simple script (bridge) to install from any where insha'Allah)
+- 🚚 multi-repo support (u can write a simple script (bridge) to install from any where insha'Allah)
 - 🗃️ full-management of packages insha'Allah install, update, remove support
 
 # Installation
@@ -163,9 +163,11 @@ u just have to handle one of the valid operations as must wich is the `install` 
 example of a bridge:
 
 file tree:
+```tree
 test_bridge
 ├── run
 └── install_command_handler.sh
+```
 
 run:
 ```bash
@@ -188,7 +190,7 @@ echo './pkg,0.0.1' # then u have to return the pkg path then comma then the pkg 
 
 # Known Issues
 
-1. #3 don't use the input shortcut if u have options
+1. don't use the input shortcut if u have options (see [#3])
 e.g:
 
 ```diff
@@ -212,7 +214,7 @@ the project is open to contributions, if u want to contribute open an issue or a
 
 2. Why bridges are just an executable files what to do not add a scripting engine for better integration:
 
-    look at issue #2, and a short answer is this project was support lua before, but this change, and this is better for muli language support and a lot of stuff.
+    look at issue [#2], and a short answer is this project was support lua before, but this change, and this is better for muli language support and a lot of stuff.
 
 # License
 
