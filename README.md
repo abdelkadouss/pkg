@@ -21,22 +21,18 @@ this program is nix only (linux, mac, bsd*, etc.)
 ## Install from crates.io (soon insha'Allah)
 
 ```bash
-cargo install pkg-cli # pkg is token
-# optional (but recommended): rename the binary to pkg
-mv <path/to>/pkg-cli <same/path>/pkg
+cargo install pkg-pm # pkg is token
 ```
 
 ## From releases
 
 1. go to [releases](https://github.com/abdelkadous/pkg/releases) and download the latest release for your system.
-2. rename it to `pkg`
 3. move it to `/usr/local/bin`
 
 ## From source
 
 ```bash
 cargo install --git https://github.com/abdelkadous/pkg.git --root .
-mv ./pkg-cli /usr/local/bin/pkg # u may need sudo
 ```
 
 > if you don't wanna shell completion disable the feature `cli_complation` by adding this flag: `--no-default-features`
