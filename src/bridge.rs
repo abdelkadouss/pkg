@@ -116,6 +116,26 @@ pub enum BridgeApiError {
     #[error("Failed to open log file: {0}")]
     #[diagnostic(code(bridge::bridge_failed_to_open_log_file))]
     BridgeFailedToOpenLogFile(String),
+
+    #[error("Pkg'path with try directory should be a directory: {0}")]
+    #[diagnostic(code(bridge::bridge_entry_point_is_file))]
+    PkgPathWithTryDirectoryShouldBeADirectory(PathBuf),
+
+    #[error("The entry point is a directory: {0}")]
+    #[diagnostic(code(bridge::bridge_entry_point_is_directory))]
+    PkgEntryPointIsDirectory(PathBuf),
+
+    #[error("The entry point is an executable: {0}")]
+    #[diagnostic(code(bridge::bridge_entry_point_is_executable))]
+    PkgEntryPointIsNotExecutable(PathBuf),
+
+    #[error("The pkg path is not executable and type is single executable: {0}")]
+    #[diagnostic(code(bridge::PkgIsNotExecutableWithTypeSingleExecutable))]
+    PkgIsNotExecutableWithTypeSingleExecutable(PathBuf),
+
+    #[error("The pkg path should be a file if type is single executable: {0}")]
+    #[diagnostic(code(bridge::PkgPathWithTrySingleExecutableShouldBeFile))]
+    PkgPathWithTrySingleExecutableShouldBeFile(PathBuf),
 }
 
 fn write_logs(pkg_name: &str, log_file: &PathBuf, bridge_output: &Output) -> Result<()> {
@@ -445,10 +465,44 @@ impl BridgeApi {
             return Err(BridgeApiError::BridgeNotValid(pkg_path))?;
         }
 
+        if let PkgType::SingleExecutable = &pkg_type {
+            if !pkg_path.is_file() {
+                return Err(BridgeApiError::PkgPathWithTrySingleExecutableShouldBeFile(
+                    pkg_path.clone(),
+                ))?;
+            }
+
+            if !is_executable(&pkg_path)? {
+                return Err(BridgeApiError::PkgIsNotExecutableWithTypeSingleExecutable(
+                    pkg_path.clone(),
+                ))?;
+            }
+        }
+
         if let PkgType::Directory(path) = &pkg_type
             && !path.exists()
         {
             return Err(BridgeApiError::BridgeNotValidEntryPoint(path.clone()))?;
+        }
+
+        if let PkgType::Directory(_) = &pkg_type
+            && !pkg_path.is_dir()
+        {
+            return Err(BridgeApiError::PkgPathWithTryDirectoryShouldBeADirectory(
+                pkg_path.clone(),
+            ))?;
+        }
+
+        if let PkgType::Directory(path) = &pkg_type
+            && path.is_dir()
+        {
+            return Err(BridgeApiError::PkgEntryPointIsDirectory(path.clone()))?;
+        }
+
+        if let PkgType::Directory(path) = &pkg_type
+            && !is_executable(path)?
+        {
+            return Err(BridgeApiError::PkgEntryPointIsNotExecutable(path.clone()))?;
         }
 
         Ok(BridgeOutput {
