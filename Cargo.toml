@@ -9,6 +9,10 @@ repository = "https://github.com/abdelkadouss/pkg"
 keywords = [ "cli", "package", "package-manager", "pkg", "install" ]
 categories = [ "command-line-utilities", "development-tools" ]
 
+[[bin]]
+name = "pkg-cli"
+path = "src/main.rs"
+
 [features]
 default = ["cli_complation"]
 cli_complation = ["clap_complete", "clap_complete_nushell"]
