@@ -1,8 +1,14 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+#[cfg(feature = "cli_complation")]
+use clap_complete::Shell as ClapShell;
+#[cfg(feature = "cli_complation")]
+use clap_complete_nushell::Nushell;
 use cli_table::{Cell, Style, Table, print_stdout};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use miette::{IntoDiagnostic, Result};
 use owo_colors::OwoColorize;
+#[cfg(feature = "cli_complation")]
+use pkg::cmd::Shell;
 use pkg::{
     DEFAULT_CONFIG_FILE_EXTENSION, DEFAULT_CONFIG_FILE_NAME, DEFAULT_LOG_DIR, DEFAULT_WORKING_DIR,
     bridge,
@@ -121,6 +127,58 @@ fn main() -> Result<()> {
             println!("in the name of Allah");
             let docs = include_str!("../docs/user.md");
             println!("{}", docs);
+
+            Ok(())
+        }
+        #[cfg(feature = "cli_complation")]
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+
+            match shell {
+                Shell::Bash => {
+                    clap_complete::generate(
+                        ClapShell::Bash,
+                        &mut cmd,
+                        "pkg",
+                        &mut std::io::stdout(),
+                    );
+                }
+                Shell::Fish => {
+                    clap_complete::generate(
+                        ClapShell::Fish,
+                        &mut cmd,
+                        "pkg",
+                        &mut std::io::stdout(),
+                    );
+                }
+                Shell::Zsh => {
+                    clap_complete::generate(
+                        ClapShell::Zsh,
+                        &mut cmd,
+                        "pkg",
+                        &mut std::io::stdout(),
+                    );
+                }
+                Shell::Elvish => {
+                    clap_complete::generate(
+                        ClapShell::Elvish,
+                        &mut cmd,
+                        "pkg",
+                        &mut std::io::stdout(),
+                    );
+                }
+                Shell::Nushell => {
+                    clap_complete::generate(Nushell, &mut cmd, "pkg", &mut std::io::stdout());
+                }
+                Shell::PowerShell => {
+                    clap_complete::generate(
+                        ClapShell::PowerShell,
+                        &mut cmd,
+                        "pkg",
+                        &mut std::io::stdout(),
+                    );
+                }
+            }
 
             Ok(())
         }

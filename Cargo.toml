@@ -1,9 +1,13 @@
 [package]
 name = "pkg"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.89"
 description = "A powerful insh'Allah, mutli-language-secriptable, multi-platform, multi-repo yet simple and declarative package manager"
+
+[features]
+default = ["cli_complation"]
+cli_complation = ["clap_complete", "clap_complete_nushell"]
 
 [dependencies]
 miette = { version = "7.6.0", features = ["fancy"] }
@@ -12,6 +16,8 @@ thiserror = "2.0.15"
 kdl = "6.3.4"
 clap = { version = "4.5.45", features = ["derive", "color"] }
 clap_derive = "4.5.45"
+clap_complete_nushell = { version = "4.5.10", optional = true }
+clap_complete = { version = "4.5.65", optional = true }
 rpassword = "7.4.0"
 owo-colors = "4.2.2"
 indicatif = "0.18.0"

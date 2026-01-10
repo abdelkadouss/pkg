@@ -1,9 +1,20 @@
 use clap::{ColorChoice, Parser, Subcommand};
 
+#[cfg(feature = "cli_complation")]
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum Shell {
+    Bash,
+    Fish,
+    Zsh,
+    Elvish,
+    Nushell,
+    #[allow(clippy::enum_variant_names)]
+    PowerShell, // NOTE: this is not needed really because this is unix only
+}
+
 #[derive(Parser)]
 #[command(name = "pkg")]
-#[command(version = "0.2.0")]
-#[command(about = "A package manager with Lua bridge support", long_about = None)]
+#[command(version, about, long_about = None)] // Read from `Cargo.toml`
 #[command(color = ColorChoice::Always)] // Always show colors
 pub struct Cli {
     #[command(subcommand)]
@@ -44,6 +55,14 @@ pub enum Commands {
 
     /// Some notes can help insha'Allah
     Docs,
+
+    #[cfg(feature = "cli_complation")]
+    /// Generate shell completion scripts for your clap::Command
+    #[command(alias = "compl")]
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
 }
 
 // Helper function to parse CLI arguments
