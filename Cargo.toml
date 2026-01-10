@@ -1,5 +1,5 @@
 [package]
-name = "pkg"
+name = "pkg-cli"
 version = "0.2.2"
 edition = "2024"
 rust-version = "1.89"
@@ -10,7 +10,7 @@ keywords = [ "cli", "package", "package-manager", "pkg", "install" ]
 categories = [ "command-line-utilities", "development-tools" ]
 
 [[bin]]
-name = "pkg-cli"
+name = "pkg"
 path = "src/main.rs"
 
 [features]

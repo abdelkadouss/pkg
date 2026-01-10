@@ -8,8 +8,8 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use miette::{IntoDiagnostic, Result};
 use owo_colors::OwoColorize;
 #[cfg(feature = "cli_complation")]
-use pkg::cmd::Shell;
-use pkg::{
+use pkg_cli::cmd::Shell;
+use pkg_cli::{
     DEFAULT_CONFIG_FILE_EXTENSION, DEFAULT_CONFIG_FILE_NAME, DEFAULT_LOG_DIR, DEFAULT_WORKING_DIR,
     bridge,
     cmd::{Cli, Commands},
