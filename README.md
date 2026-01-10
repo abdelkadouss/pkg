@@ -224,7 +224,7 @@ the project is open to contributions, if u want to contribute open an issue or a
 
 1. Why shell completion is a feature?
 
-    in my opinion u should't store static data in bin form specially if u need this data only onec, u ugly gonna run this command onec so why to store is the bin this is an overhead.
+    in my opinion u should't store static data in bin formae specially if u need this data only onec, u probably gonna run this command onec so why to store is the bin this is an overhead.
 
 2. Why bridges are just an executable files what to do not add a scripting engine for better integration:
 
