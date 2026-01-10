@@ -136,6 +136,10 @@ or for a specific pkg:
 pkg update <the-pkg-name> # e.g: pkg update nvim
 ```
 
+## 5. Full Example
+
+for a full real example see the [examples](https://github.com/abdelkadouss/dotfiles/tree/main/.config/pkg) dir in my dotfiles repo.
+
 ## Bridges
 
 ### How to write a bridge ( how the bridges works )
@@ -164,6 +168,7 @@ example of a bridge:
 
 file tree:
 ```tree
+// under the bridges-set dir
 test_bridge
 ├── run
 └── install_command_handler.sh
