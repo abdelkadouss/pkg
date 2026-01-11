@@ -242,6 +242,6 @@ the project is open to contributions, if u want to contribute open an issue or a
 
 # License
 
-Neda is licensed under the [GNU General Public License v3.0](https://github.com/aqhwan/neda/raw/refs/heads/main/LICENSE) plus one extra condition:
+Pkg is licensed under the [GNU General Public License v3.0](https://github.com/abdelkadouss/pkg/raw/refs/heads/main/LICENSE) plus one extra condition:
 
 * Your use should be in line with the Islamic Sharia Laws. If there is any conflict between the terms of the 'GNU General Public License v3.0' and the Islamic Sharia Laws, the Islamic Sharia Laws shall prevail.
