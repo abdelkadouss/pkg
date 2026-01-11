@@ -219,6 +219,13 @@ bridge {
 
 2. pkg has more then one executable but all of them should be linked in the PATH: pkg mainly new support pkg has more then one executable but it's just link one on the PATH.
 
+# Debugging
+
+U may get fails in ur installs with brigets to debug them check the log files on: `/var/log/pkg/<bridge-name>.log`
+
+> [!TIP]
+> run `pkg clean` from time to time to clean the logs and the installs garbage.
+
 # Contributing
 
 the project is open to contributions, if u want to contribute open an issue or a pr.
