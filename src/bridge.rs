@@ -208,7 +208,7 @@ impl Operation {
 impl BridgeApi {
     pub fn new(
         bridge_set_path: PathBuf,
-        needed_bridges: &Vec<String>,
+        needed_bridges: &[String],
         db_path: &PathBuf,
     ) -> Result<Self> {
         let bridges = Self::load_bridges(&bridge_set_path, needed_bridges)?;
@@ -512,10 +512,7 @@ impl BridgeApi {
         })
     }
 
-    fn load_bridges(
-        bridge_set_path: &PathBuf,
-        needed_bridges: &Vec<String>,
-    ) -> Result<Vec<Bridge>> {
+    fn load_bridges(bridge_set_path: &PathBuf, needed_bridges: &[String]) -> Result<Vec<Bridge>> {
         const BRIDGE_ENTRY_POINT_NAME: &str = "run";
 
         if !bridge_set_path.exists() {

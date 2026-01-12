@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use miette::Result;
-use pkg::{bridge::*, config::Config, input::PkgDeclaration};
+use pkg_cli::{bridge::*, config::Config, input::PkgDeclaration};
 
 fn main() -> Result<()> {
     let config = Config::load(PathBuf::from(".tmp/config/config.kdl"))?;

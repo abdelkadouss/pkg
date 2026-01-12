@@ -71,14 +71,12 @@ fn detect_pkg_kdl_files(path: &PathBuf) -> Result<Vec<PathBuf>> {
         let path = entry.path();
 
         if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if ext.eq_ignore_ascii_case("kdl") {
-                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if !file_name.starts_with('.') {
-                            inputs_paths.push(path);
-                        }
-                    }
-                }
+            if let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && ext.eq_ignore_ascii_case("kdl")
+                && let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+                && !file_name.starts_with('.')
+            {
+                inputs_paths.push(path);
             }
         } else if path.is_dir() {
             inputs_paths.extend(detect_pkg_kdl_files(&path)?);

@@ -1,4 +1,4 @@
-use pkg::input::*;
+use pkg_cli::input::*;
 use std::path::PathBuf;
 
 fn main() -> miette::Result<()> {

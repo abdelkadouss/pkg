@@ -1,4 +1,4 @@
-use pkg::config::Config;
+use pkg_cli::config::Config;
 use std::path::PathBuf;
 
 fn main() -> miette::Result<()> {

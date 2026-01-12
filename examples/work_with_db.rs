@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use pkg::db::*;
+use pkg_cli::db::*;
 
 fn main() -> miette::Result<()> {
     let db = Db::new(&PathBuf::from("cal.db"))?;
