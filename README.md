@@ -21,7 +21,7 @@ this program is nix only (linux, mac, bsd*, etc.)
 ## Install from crates.io (soon insha'Allah)
 
 ```bash
-cargo install pkg-pm # pkg is token
+cargo install pkg-rs # the name pkg is token
 ```
 
 ## From releases
