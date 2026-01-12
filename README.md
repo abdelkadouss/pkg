@@ -16,9 +16,9 @@ Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-
 
 ## Note
 
-this program is nix only (linux, mac, bsd*, etc.)
+this program is unix only (linux, mac, bsd*, etc.)
 
-## Install from crates.io (soon insha'Allah)
+## Install from crates.io
 
 ```bash
 cargo install pkg-rs # the name pkg is token
