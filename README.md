@@ -2,7 +2,13 @@
 
 # Pkg 📦 - A package manager
 
+> [!CAUTION]
+> please read this README carefully before use + read the [Bridges](#Bridges) section CAUTION wrotten there becuase maybe if u don't understand what's wrotten here correctly ur gonna make big security mistakes.
+
 Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-repo yet simple and declarative package manager. In other sed u can insah'Allah insatll packages via pkg from any where insha'Allah in sync with a config files via simple scripts that wrotten in any language on any unix-like machine insha'Allah.
+
+> [!IMPORTANT]
+> the program can contain bugs and it's required running as root, **NO WARRANTYS**, use at your own risks.
 
 ## Demo
 
@@ -157,6 +163,9 @@ pkg update <the-pkg-name> # e.g: pkg update nvim
 for a full real example see the [examples](https://github.com/abdelkadouss/dotfiles/tree/main/.config/pkg) dir in my dotfiles repo.
 
 ## Bridges
+
+> [!CAUTION]
+> bridges are just scripts in the end of the day and can contain bugs but the problem with bridge is that it's so dangerous becuase it's running as root in ur computer becuase of pkg management purpose so make sure u are know what inside this bridge and make sure to well test it before use. we recommended to dev this bridges inside a container. for e.g use docker.
 
 ### How to write a bridge ( how the bridges works )
 
