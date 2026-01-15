@@ -4,6 +4,10 @@
 
 Pkg is a powerful insh'Allah, multi-language-secriptable, multi-platform, multi-repo yet simple and declarative package manager. In other sed u can insah'Allah insatll packages via pkg from any where insha'Allah in sync with a config files via simple scripts that wrotten in any language on any unix-like machine insha'Allah.
 
+## Demo
+
+![demo](/docs/res/pkg_demo.gif)
+
 ## Features
 - 📦 Install packages from any repo
 - 💻 Platform undependent (works insha'Allah on any unix-like machine)
