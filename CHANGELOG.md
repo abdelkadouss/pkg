@@ -37,3 +37,12 @@ the first stable release thanks to Allah
 ### Other 📚
 
 - add ci cd for auto build and upload to github release.
+
+## 0.2.3
+
+this release is all about documentation and user explanations.
+
+### Other 📚
+
+- improve the docs (readme) and explanations
+- add some important security notes
