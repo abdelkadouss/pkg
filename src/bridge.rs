@@ -5,7 +5,7 @@ use std::{
     env,
     fs::OpenOptions,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{self, Output},
 };
 use thiserror::Error;
@@ -187,7 +187,7 @@ mod default_impls {
 }
 
 // NOTE: unix only
-fn is_executable(path: &PathBuf) -> Result<bool> {
+fn is_executable(path: &Path) -> Result<bool> {
     use std::os::unix::fs::PermissionsExt;
 
     let metadata = path.metadata().into_diagnostic()?;
@@ -512,17 +512,20 @@ impl BridgeApi {
         })
     }
 
-    fn load_bridges(bridge_set_path: &PathBuf, needed_bridges: &[String]) -> Result<Vec<Bridge>> {
+    fn load_bridges(bridge_set_path: &Path, needed_bridges: &[String]) -> Result<Vec<Bridge>> {
         const BRIDGE_ENTRY_POINT_NAME: &str = "run";
 
         if !bridge_set_path.exists() {
-            return Err(BridgeApiError::BridgeSetNotFound(bridge_set_path.clone()).into());
+            return Err(
+                BridgeApiError::BridgeSetNotFound(bridge_set_path.to_path_buf().clone()).into(),
+            );
         };
 
         if !bridge_set_path.is_dir() {
-            return Err(
-                BridgeApiError::BridgeSetPathAreNotADirectory(bridge_set_path.clone()).into(),
-            );
+            return Err(BridgeApiError::BridgeSetPathAreNotADirectory(
+                bridge_set_path.to_path_buf().clone(),
+            )
+            .into());
         }
 
         let content = bridge_set_path
@@ -658,5 +661,24 @@ impl BridgeApi {
         std::env::set_current_dir(&tmp_dir).into_diagnostic()?;
 
         Ok(tmp_dir)
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use tempfile::NamedTempFile;
+
+    use crate::bridge::*;
+
+    #[test]
+    fn init_a_bridge_api() -> Result<(), Box<dyn std::error::Error>> {
+        let bridge_set_path = std::path::PathBuf::from("examples/docker/.bridges");
+        let _bridge_api = BridgeApi::new(
+            bridge_set_path,
+            vec!["bridge1".to_string()].as_ref(),
+            &NamedTempFile::new().unwrap().path().to_path_buf(),
+        )?;
+        Ok(())
     }
 }

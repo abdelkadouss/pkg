@@ -1,14 +1,14 @@
 # Dockerfile.dev - For development only!
 FROM rust:1.89-bullseye
 
-# Install auto-reload tool
-RUN cargo install watchexec-cli
+# Install pkgx for all the dev tools
 RUN cargo install pkgx
 
+# Set work dir
 WORKDIR /app
 
-# Create config directory (same as your production image)
+# Make config directory
 RUN mkdir -p /root/.config/pkg/.bridges/bridge
 
-# Default command: auto-rebuild and run on code changes
+# Start nushell sesstion
 CMD ["pkgx", "+nushell.sh", "nu@0.107.0"]
