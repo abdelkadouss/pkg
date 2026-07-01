@@ -25,6 +25,17 @@ impl ExtandPath for PathBuf {
     }
 }
 
+pub trait LuaResultExt<T> {
+    fn into_report(self) -> miette::Result<T>;
+}
+
+impl<T> LuaResultExt<T> for mlua::Result<T> {
+    /// convert lua err into miette report
+    fn into_report(self) -> miette::Result<T> {
+        self.map_err(|e| miette::miette!("{e}"))
+    }
+}
+
 #[cfg(test)]
 #[test]
 fn extand_path() -> miette::Result<()> {
