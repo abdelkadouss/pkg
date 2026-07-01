@@ -14,21 +14,23 @@ name = "pkg"
 path = "src/main.rs"
 
 [features]
-default = ["cli_complation"]
-cli_complation = ["clap_complete", "clap_complete_nushell"]
+default = ["api"]
 api = []
 
 [dependencies]
+mlua = { version = "0.11.6", features = ["lua54", "vendored", "serde"] }
 miette = { version = "7.6.0", features = ["fancy"] }
-rusqlite = { version = "0.40.0", features = ["bundled"] }
 thiserror = "2.0.15"
-clap = { version = "4.5.45", features = ["derive", "color"] }
-clap_derive = "4.5.45"
-clap_complete_nushell = { version = "4.5.10", optional = true }
-clap_complete = { version = "4.5.65", optional = true }
-owo-colors = "4.2.2"
-indicatif = "0.18.0"
-cli-table = "0.5"
+path-absolutize = "3.1.1"
+serde = { version =  "1.0.228", features = ["derive"] }
+# rusqlite = { version = "0.40.0", features = ["bundled"] }
+# clap = { version = "4.5.45", features = ["derive", "color"] }
+# clap_derive = "4.5.45"
+# clap_complete_nushell = { version = "4.5.10", optional = true }
+# clap_complete = { version = "4.5.65", optional = true }
+# owo-colors = "4.2.2"
+# indicatif = "0.18.0"
+# cli-table = "0.5"
 
 [dev-dependencies]
 tempfile = "3.20.0"

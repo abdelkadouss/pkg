@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 return {
   paths = {
     inputs = '~/.config/pkg',
@@ -11,9 +12,8 @@ return {
     database_path = '/var/db/pkg/packages.db',
     logs_path = '/var/log/pkg',
     max_thread_number = 10,
-    clean_mode = {
-      enable = true, -- means it's send me wornings if strict is false or panic if strict is true if i have some unused pkg declaratoins.
-      strict = true  -- panic if find unused pkg declaratoins.
-    }
-  }
+    clean_mode =
+        api.copts
+        .soft -- copts (config opts): [soft|strict] means it's send me wornings if strict is false or panic if strict is true if i have some unused pkg declaratoins.
+  },
 }
