@@ -1,4 +1,9 @@
-use mlua::ExternalResult;
+use std::{fs, path::PathBuf};
+
+use miette::IntoDiagnostic;
+use mlua::{ExternalResult, Lua};
+
+use crate::utils::LuaResultExt;
 
 #[derive(Default, Debug)]
 struct BridgeFeatures {
@@ -170,4 +175,37 @@ fn load_bridge() -> miette::Result<()> {
     );
 
     Ok(())
+}
+
+fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridge>> {
+    let mut out = Vec::<Bridge>::new();
+
+    let bridge_dir = fs::read_dir(&bridges_path).into_diagnostic()?;
+    for entry in bridge_dir {
+        let entry = entry.into_diagnostic()?;
+
+        // skip hiding entrys
+        if entry.file_name().to_string_lossy().starts_with(".") {
+            continue;
+        }
+
+        if entry.path().is_dir() {
+            out.append(&mut load_bridges(engine, entry.path())?);
+        }
+
+        let entry_path = if entry.path().is_symlink() {
+            fs::read_link(entry.path()).into_diagnostic()?
+        } else {
+            entry.path().to_path_buf()
+        };
+
+        out.push(
+            engine
+                .load(fs::read_to_string(entry_path).into_diagnostic()?)
+                .eval()
+                .into_report()?,
+        );
+    }
+
+    todo!()
 }
