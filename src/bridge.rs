@@ -1,6 +1,8 @@
+const DEFAULT_BRIGE_ENTRY_POINT_FINE: &str = "run.lua";
+
 use std::{fs, path::PathBuf};
 
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, miette};
 use mlua::{ExternalResult, Lua};
 
 use crate::utils::LuaResultExt;
@@ -27,12 +29,31 @@ struct ActionToggles {
 }
 
 #[derive(Debug)]
+pub enum BridgeDep {
+    ExecName(String),
+    FetchImpl(mlua::Function),
+}
+
+#[derive(Debug)]
 struct Bridge {
-    features: BridgeFeatures,
-    just_a_dep: bool,
-    install: mlua::Function,
-    update: Option<mlua::Function>,
-    remove: Option<mlua::Function>,
+    pub features: BridgeFeatures,
+    pub just_a_dep: bool,
+    pub deps: Vec<BridgeDep>,
+    pub install: mlua::Function,
+    pub update: Option<mlua::Function>,
+    pub remove: Option<mlua::Function>,
+}
+
+impl mlua::FromLua for BridgeDep {
+    fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
+        if let mlua::Value::String(dep) = value {
+            Ok(Self::ExecName(dep.to_string_lossy()))
+        } else if let mlua::Value::Function(fetch_impl) = value {
+            Ok(Self::FetchImpl(fetch_impl))
+        } else {
+            Err("").into_lua_err()
+        }
+    }
 }
 
 impl mlua::FromLua for BridgeHook {
@@ -70,6 +91,7 @@ impl mlua::FromLua for Bridge {
             Ok(Bridge {
                 features: bridge_def.get("featurs_support").unwrap_or_default(),
                 just_a_dep: bridge_def.get("just_a_dep").unwrap_or(false),
+                deps: bridge_def.get("deps").unwrap_or(vec![]),
                 install: bridge_def.get::<mlua::Function>("install")?,
                 update: bridge_def
                     .get::<mlua::Function>("update")
@@ -185,12 +207,8 @@ fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridg
         let entry = entry.into_diagnostic()?;
 
         // skip hiding entrys
-        if entry.file_name().to_string_lossy().starts_with(".") {
+        if entry.file_name().to_string_lossy().starts_with(".") || !entry.path().is_dir() {
             continue;
-        }
-
-        if entry.path().is_dir() {
-            out.append(&mut load_bridges(engine, entry.path())?);
         }
 
         let entry_path = if entry.path().is_symlink() {
@@ -198,6 +216,18 @@ fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridg
         } else {
             entry.path().to_path_buf()
         };
+
+        let brige_entry_point_path = entry_path.join(DEFAULT_BRIGE_ENTRY_POINT_FINE);
+
+        if !brige_entry_point_path.exists() {
+            return Err(miette!(format!(
+                "bridge {} don't have an entry point",
+                entry
+                    .file_name()
+                    .to_str()
+                    .unwrap_or(bridges_path.to_str().unwrap()) // FIXME: handle this better
+            )));
+        }
 
         out.push(
             engine
