@@ -7,7 +7,7 @@ return {
     required = true
   },
   version_track = true,
-  path_type = 'dir',         -- opts: file, executable, dir, executable_or_dir, file_or_dir, any
+  path_type = 'Dir',         -- opts: file, executable, dir, executable_or_dir, file_or_dir, any
   install_as_assets = false, -- can't be install with other pkgs
   hooks = {
     after_install = function(info)

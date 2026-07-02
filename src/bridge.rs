@@ -207,5 +207,5 @@ fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridg
         );
     }
 
-    todo!()
+    Ok(out)
 }
