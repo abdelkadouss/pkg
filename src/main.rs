@@ -3,6 +3,7 @@ mod api;
 mod bridge;
 mod config;
 mod fs;
+mod pkg;
 mod pkg_type;
 mod utils;
 

@@ -5,7 +5,7 @@ use std::{fs, path::PathBuf};
 use miette::{IntoDiagnostic, miette};
 use mlua::{ExternalResult, Lua};
 
-use crate::utils::LuaResultExt;
+use crate::{pkg::Os, utils::LuaResultExt};
 
 #[derive(Default, Debug)]
 struct BridgeFeatures {
@@ -38,6 +38,7 @@ pub enum BridgeDep {
 struct Bridge {
     pub features: BridgeFeatures,
     pub just_a_dep: bool,
+    pub os: Option<Os>,
     pub deps: Vec<BridgeDep>,
     pub install: mlua::Function,
     pub update: Option<mlua::Function>,
@@ -91,13 +92,11 @@ impl mlua::FromLua for Bridge {
             Ok(Bridge {
                 features: bridge_def.get("featurs_support").unwrap_or_default(),
                 just_a_dep: bridge_def.get("just_a_dep").unwrap_or(false),
+                os: bridge_def.get("os")?,
                 deps: bridge_def.get("deps").unwrap_or(vec![]),
                 install: bridge_def.get::<mlua::Function>("install")?,
-                update: bridge_def
-                    .get::<mlua::Function>("update")
-                    .map(Some)
-                    .unwrap_or(None),
-                remove: bridge_def.get("remove").map(Some).unwrap_or(None),
+                update: bridge_def.get("update")?,
+                remove: bridge_def.get("remove")?,
             })
         } else {
             Err(format!(
@@ -154,6 +153,10 @@ fn load_bridge() -> miette::Result<()> {
                     before = { remove = true }
                 }
             },
+            os = {
+                kernal = 'linux',
+                name = 'void linux'
+            },
             -- just_a_dep = true, -- don't install if nothign depand on
                 install = function(input, version, opts)
                 -- do some thing ...
@@ -177,6 +180,13 @@ fn load_bridge() -> miette::Result<()> {
     assert!(!bridge.just_a_dep);
     assert_eq!(bridge.remove, None);
     assert_eq!(bridge.update, None);
+    assert_eq!(
+        bridge.os,
+        Some(Os::Full {
+            kernal: "linux".to_string(),
+            name: "void linux".to_string()
+        })
+    );
     assert_eq!(bridge.features.opts, ["locked"]);
     assert!(bridge.features.specify_version);
     assert_eq!(bridge.features.pkg_type, ["single_executable"]);
