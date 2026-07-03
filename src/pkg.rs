@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use mlua::ExternalResult;
+use serde::{Deserialize, Serialize};
 
 pub struct Pkg {
     pub input: String,
@@ -6,6 +9,14 @@ pub struct Pkg {
     pub deps: Option<Vec<String>>,
     pub version: Option<String>,
     pub os: Option<Os>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub struct PkgDef {
+    path: PathBuf,
+    pkg_type: Option<String>,
+    version: Option<String>,
+    link: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -35,10 +46,10 @@ impl mlua::FromLua for Os {
                 (Some(k), None) => Ok(Self::Kernal(k)),
                 (None, Some(n)) => Ok(Self::Name(n)),
                 (Some(k), Some(n)) => Ok(Self::Full { kernal: k, name: n }),
-                (None, None) => Err("").into_lua_err(),
+                (None, None) => Err("should set ether 'kernal' or 'name' in the os table or pass the kernal name as string").into_lua_err(),
             }
         } else {
-            Err("").into_lua_err()
+            Err("the value of field os sould be a string or a table").into_lua_err()
         }
     }
 }
