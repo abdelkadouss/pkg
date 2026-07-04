@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use mlua::ExternalResult;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Pkg {
     pub input: String,
     pub opts: Option<Vec<PkgOption>>,
@@ -19,18 +20,19 @@ pub struct PkgDef {
     link: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum Os {
     Kernal(String),
     Name(String),
     Full { kernal: String, name: String },
 }
 
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum PkgOption {
     String { name: String, value: String },
     Int { name: String, value: i32 },
     Bool { name: String, value: bool },
-    Function { name: String, value: mlua::Function },
+    // Function { name: String, value: mlua::Function },
     Nil { name: String },
 }
 

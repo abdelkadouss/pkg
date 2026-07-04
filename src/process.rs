@@ -24,14 +24,14 @@ pub enum HightPrivApiCmd {
     // todo
 }
 
-fn send_msg<T: Serialize>(stream: &mut UnixStream, data: T) -> miette::Result<()> {
+pub fn send_msg<T: Serialize>(stream: &mut UnixStream, data: T) -> miette::Result<()> {
     let json = serde_json::to_string(&data).into_diagnostic()?;
     stream.write_all(json.as_bytes()).into_diagnostic()?;
     stream.write_all(MESSAGE_SEPARATOR).into_diagnostic()?;
     Ok(())
 }
 
-fn reserve_msg<T: for<'a> Deserialize<'a>>(
+pub fn reserve_msg<T: for<'a> Deserialize<'a>>(
     reader: &mut BufReader<UnixStream>,
 ) -> miette::Result<Option<T>> {
     let mut line = String::new();
