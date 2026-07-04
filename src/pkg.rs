@@ -4,20 +4,12 @@ use mlua::ExternalResult;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct Pkg {
+pub struct PkgDef {
     pub input: String,
     pub opts: Option<Vec<PkgOption>>,
     pub deps: Option<Vec<String>>,
     pub version: Option<String>,
     pub os: Option<Os>,
-}
-
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct PkgDef {
-    path: PathBuf,
-    pkg_type: Option<String>,
-    version: Option<String>,
-    link: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]

@@ -8,11 +8,11 @@ use std::{
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
 
-use crate::pkg::PkgDef;
+use crate::bridge::BridgeOutput;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub enum ChildBridgeMessage {
-    Done(PkgDef),
+    Done(BridgeOutput),
     HightPrivApiReq(HightPrivApiCmd),
     ReturnErr(String), // NOTE: u may wanna add `level: u8`, look at the error
                        // function in lua.
@@ -58,23 +58,17 @@ fn communicate_between_two_process() -> miette::Result<()> {
             let mut writer = child_sock;
             sleep(Duration::from_secs(1)); // even after while.
 
-            writer
-                .write_all(
-                    serde_json::to_string(&ChildBridgeMessage::ReturnErr("error".to_string()))
-                        .into_diagnostic()?
-                        .as_bytes(),
-                )
-                .into_diagnostic()?;
+            send_msg(
+                &mut writer,
+                ChildBridgeMessage::ReturnErr("ping".to_string()),
+            )?;
         }
         ForkResult::Parent { .. } => {
             drop(child_sock);
             let mut reader = BufReader::new(parent_sock);
 
             let msg: Option<ChildBridgeMessage> = reserve_msg(&mut reader)?;
-            assert_eq!(
-                Some(ChildBridgeMessage::ReturnErr("error".to_string())),
-                msg
-            );
+            assert_eq!(Some(ChildBridgeMessage::ReturnErr("ping".to_string())), msg);
         }
     }
 

@@ -4,6 +4,7 @@ use std::{fs, path::PathBuf};
 
 use miette::{IntoDiagnostic, miette};
 use mlua::{ExternalResult, Lua};
+use serde::{Deserialize, Serialize};
 
 use crate::{pkg::Os, utils::LuaResultExt};
 
@@ -13,6 +14,21 @@ struct BridgeFeatures {
     opts: Vec<String>,
     specify_version: bool,
     hooks: BridgeHook,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub enum BridgeOutput {
+    New(PkgMetadata),
+    Remove(/*name*/ String),
+    Update(Option<PkgMetadata>),
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub struct PkgMetadata {
+    path: PathBuf,
+    pkg_type: Option<String>,
+    version: Option<String>,
+    link: Option<Vec<PathBuf>>,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -135,6 +151,47 @@ pub mod default_impl {
     }
 }
 
+fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridge>> {
+    let mut out = Vec::<Bridge>::new();
+
+    let bridge_dir = fs::read_dir(&bridges_path).into_diagnostic()?;
+    for entry in bridge_dir {
+        let entry = entry.into_diagnostic()?;
+
+        // skip hiding entrys
+        if entry.file_name().to_string_lossy().starts_with(".") || !entry.path().is_dir() {
+            continue;
+        }
+
+        let entry_path = if entry.path().is_symlink() {
+            fs::read_link(entry.path()).into_diagnostic()?
+        } else {
+            entry.path().to_path_buf()
+        };
+
+        let brige_entry_point_path = entry_path.join(DEFAULT_BRIGE_ENTRY_POINT_FINE);
+
+        if !brige_entry_point_path.exists() {
+            return Err(miette!(format!(
+                "bridge {} don't have an entry point",
+                entry
+                    .file_name()
+                    .to_str()
+                    .unwrap_or(bridges_path.to_str().unwrap()) // FIXME: handle this better
+            )));
+        }
+
+        out.push(
+            engine
+                .load(fs::read_to_string(entry_path).into_diagnostic()?)
+                .eval()
+                .into_report()?,
+        );
+    }
+
+    Ok(out)
+}
+
 #[cfg(test)]
 #[test]
 fn load_bridge() -> miette::Result<()> {
@@ -207,45 +264,4 @@ fn load_bridge() -> miette::Result<()> {
     );
 
     Ok(())
-}
-
-fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridge>> {
-    let mut out = Vec::<Bridge>::new();
-
-    let bridge_dir = fs::read_dir(&bridges_path).into_diagnostic()?;
-    for entry in bridge_dir {
-        let entry = entry.into_diagnostic()?;
-
-        // skip hiding entrys
-        if entry.file_name().to_string_lossy().starts_with(".") || !entry.path().is_dir() {
-            continue;
-        }
-
-        let entry_path = if entry.path().is_symlink() {
-            fs::read_link(entry.path()).into_diagnostic()?
-        } else {
-            entry.path().to_path_buf()
-        };
-
-        let brige_entry_point_path = entry_path.join(DEFAULT_BRIGE_ENTRY_POINT_FINE);
-
-        if !brige_entry_point_path.exists() {
-            return Err(miette!(format!(
-                "bridge {} don't have an entry point",
-                entry
-                    .file_name()
-                    .to_str()
-                    .unwrap_or(bridges_path.to_str().unwrap()) // FIXME: handle this better
-            )));
-        }
-
-        out.push(
-            engine
-                .load(fs::read_to_string(entry_path).into_diagnostic()?)
-                .eval()
-                .into_report()?,
-        );
-    }
-
-    Ok(out)
 }
