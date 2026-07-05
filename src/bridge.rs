@@ -18,17 +18,17 @@ struct BridgeFeatures {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum BridgeOutput {
-    New(PkgMetadata),
+    New(BridgeNewPkgMetadata),
     Remove(/*name*/ String),
-    Update(Option<PkgMetadata>),
+    Update(Option<BridgeNewPkgMetadata>),
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct PkgMetadata {
-    path: PathBuf,
-    pkg_type: Option<String>,
-    version: Option<String>,
-    link: Option<Vec<PathBuf>>,
+pub struct BridgeNewPkgMetadata {
+    pub path: PathBuf,
+    pub pkg_type: Option<String>,
+    pub version: Option<String>,
+    pub link: Option<Vec<PathBuf>>,
 }
 
 #[derive(Default, Debug, PartialEq)]

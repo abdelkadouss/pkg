@@ -3,12 +3,51 @@ use std::path::PathBuf;
 use mlua::ExternalResult;
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    bridge::BridgeNewPkgMetadata,
+    pkg_type::{PkgLinkOptions, PkgType},
+};
+
+#[derive(Debug, PartialEq)]
+pub struct Pkg {
+    pub name: String,
+    pub path: PathBuf,
+    pub version: Option<String>,
+    pub type_name: String,
+    pub just_a_dep: bool,
+    pub deps: Vec<String>,
+    pub linked_paths: Vec<PathBuf>,
+}
+
+impl From<(PkgUserDef, BridgeNewPkgMetadata, PkgType)> for Pkg {
+    fn from(
+        value: (
+            /*how user define the pkg in inputs*/ PkgUserDef,
+            /*the bridge output*/ BridgeNewPkgMetadata,
+            /*the user define of the pkg type*/ PkgType,
+        ),
+    ) -> Self {
+        Self {
+            name: value.0.name,
+            path: value.1.path,
+            version: value.1.version,
+            type_name: value.1.pkg_type.unwrap_or(value.2.name),
+            just_a_dep: value.0.just_a_dep.unwrap_or(value.2.just_a_dep),
+            deps: value.0.deps.unwrap_or_default(),
+            linked_paths: value.1.link.unwrap_or_default(),
+        }
+    }
+}
+
+/// the represent how to pkg defined in the user inputs
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct PkgDef {
+pub struct PkgUserDef {
+    pub name: String,
     pub input: String,
     pub opts: Option<Vec<PkgOption>>,
     pub deps: Option<Vec<String>>,
     pub version: Option<String>,
+    pub just_a_dep: Option<bool>,
     pub os: Option<Os>,
 }
 

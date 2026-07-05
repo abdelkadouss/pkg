@@ -76,11 +76,12 @@ pub struct PkgTypeLuaDef {
     pub path_type: PkgPathType,
     pub install_as_assets: bool,
     pub install_paths: Vec<PathBuf>,
+    pub just_a_dep: Option<bool>,
     pub hooks: PkgHooks,
 }
 
 #[derive(Clone)]
-struct PkgType {
+pub struct PkgType {
     pub name: String,
     pub out: PathBuf,
     pub link: PkgLinkOptions,
@@ -88,6 +89,7 @@ struct PkgType {
     pub path_type: PkgPathType,
     pub install_as_assets: bool,
     pub install_paths: Vec<PathBuf>,
+    pub just_a_dep: bool,
     pub hooks: PkgHooks,
 }
 
@@ -101,6 +103,7 @@ impl PkgType {
             hooks: lua_def.hooks,
             path_type: lua_def.path_type,
             install_as_assets: lua_def.install_as_assets,
+            just_a_dep: lua_def.just_a_dep.unwrap_or(false),
             install_paths: lua_def.install_paths,
         }
     }
@@ -115,6 +118,7 @@ impl FromLua for PkgTypeLuaDef {
                 version_track: pkg_type_def.get("version_track").unwrap_or_default(),
                 path_type: pkg_type_def.get("path_type").unwrap_or_default(),
                 install_as_assets: pkg_type_def.get("install_as_assets").unwrap_or_default(),
+                just_a_dep: pkg_type_def.get("just_a_dep").unwrap_or_default(),
                 install_paths: pkg_type_def.get("install_paths").unwrap_or(Vec::new()),
                 hooks: pkg_type_def.get("hooks").unwrap_or_default(),
             })
