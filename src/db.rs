@@ -116,13 +116,32 @@ impl Db {
     }
 
     /// insert new pkg to db.
-    pub fn install(&self, pkgs: Vec<BridgeNewPkgMetadata>) -> miette::Result<()> {
+    pub fn install(&self, pkgs: Vec<Pkg>) -> miette::Result<()> {
         for pkg in pkgs {
-            self.conn.execute(sql::ADD_PKG, ()).into_diagnostic()?;
-            self.conn.execute(sql::LINK_PKG, ()).into_diagnostic()?;
             self.conn
-                .execute(sql::DEPAND_ON_PKG, ())
+                .execute(
+                    sql::ADD_PKG,
+                    (
+                        &pkg.name,
+                        &pkg.path.to_string_lossy(),
+                        &pkg.version,
+                        &pkg.type_name,
+                        &pkg.just_a_dep,
+                    ),
+                )
                 .into_diagnostic()?;
+
+            for path in pkg.linked_paths {
+                self.conn
+                    .execute(sql::LINK_PKG, (&pkg.name, path.to_string_lossy()))
+                    .into_diagnostic()?;
+            }
+
+            for dep in pkg.deps {
+                self.conn
+                    .execute(sql::DEPAND_ON_PKG, (&pkg.name, dep))
+                    .into_diagnostic()?;
+            }
         }
 
         Ok(())
@@ -224,7 +243,8 @@ mod test {
 
     #[test]
     fn load_pkg_from_db() -> miette::Result<()> {
-        let (db, _file) = prepare()?;
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
 
         let pkgs = db.load()?;
 
@@ -264,14 +284,43 @@ mod test {
         Ok(())
     }
 
-    fn prepare() -> miette::Result<(Db, NamedTempFile)> {
+    #[test]
+    fn add_new_pkg_to_db() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+
+        let input: Vec<Pkg> = [Pkg {
+            name: "pkg".into(),
+            path: "/some/path".into(),
+            version: Some("0.0.1".into()),
+            type_name: "dir".into(),
+            just_a_dep: false,
+            deps: vec![],
+            linked_paths: vec!["bin".into()],
+        }]
+        .into();
+
+        db.install(input.clone())?;
+
+        let pkgs = db.load()?;
+
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs, input);
+
+        Ok(())
+    }
+
+    fn make_new_db() -> miette::Result<(Db, NamedTempFile)> {
         let file = NamedTempFile::new().into_diagnostic()?;
         let db = Db::new(file.path().to_path_buf())?;
 
+        Ok((db, file))
+    }
+
+    fn inject_mock(db: &Db) -> miette::Result<()> {
         for query in MOCK_DATA {
             db.conn.execute(query, []).into_diagnostic()?;
         }
 
-        Ok((db, file))
+        Ok(())
     }
 }

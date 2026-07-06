@@ -3,12 +3,9 @@ use std::path::PathBuf;
 use mlua::ExternalResult;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    bridge::BridgeNewPkgMetadata,
-    pkg_type::{PkgLinkOptions, PkgType},
-};
+use crate::{bridge::BridgeNewPkgMetadata, pkg_type::PkgType};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Pkg {
     pub name: String,
     pub path: PathBuf,
