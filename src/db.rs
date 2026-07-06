@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use miette::IntoDiagnostic;
-use rusqlite::{Connection, Row, fallible_iterator::FallibleIterator};
+use miette::{IntoDiagnostic, miette};
+use rusqlite::{Connection, Row, fallible_iterator::FallibleIterator, params};
 
 use crate::{bridge::BridgeNewPkgMetadata, pkg::Pkg};
 
@@ -97,6 +97,18 @@ mod sql {
         ON p.name = d.pkg;
     "#;
 
+    pub const LOAD_PKG: &str = r#"
+        SELECT p.name, p.path, p.version, p.type_name, p.just_a_dep, d.depends_on as deps, l.path_in_pkg as linked_paths
+        FROM pkg p
+        LEFT JOIN link l
+        ON p.name = l.pkg
+        LEFT JOIN dep d
+        ON p.name = d.pkg
+        WHERE name = ?1;
+    "#;
+
+    pub const UNDEPAND: &str = "DELETE FROM dep WHERE pkg = ?1 AND depends_on = ?2";
+
     pub const ADD_PKG: &str = "INSERT INTO pkg (name, path, version, type_name, just_a_dep) VALUES ( ?1, ?2, ?3, ?4, ?5 )";
     pub const LINK_PKG: &str = "INSERT INTO link (pkg, path_in_pkg) VALUES ( ?1, ?2 )";
     pub const DEPAND_ON_PKG: &str = "INSERT INTO dep (pkg, depends_on) VALUES ( ?1, ?2 )";
@@ -163,7 +175,7 @@ impl Db {
         todo!()
     }
 
-    pub fn load(&self) -> miette::Result<Vec<Pkg>> {
+    pub fn load_all(&self) -> miette::Result<Vec<Pkg>> {
         let mut statm = self.conn.prepare(sql::LOAD_ALL_PKGS).into_diagnostic()?;
 
         let pkgs: Vec<PkgFromDb> = statm
@@ -176,9 +188,44 @@ impl Db {
         Ok(join_matched_pkgs(pkgs))
     }
 
+    /// load one pkg
+    pub fn load(&self, pkg_name: &str) -> miette::Result<Pkg> {
+        let mut statm = self.conn.prepare(sql::LOAD_PKG).into_diagnostic()?;
+
+        let pkgs: Vec<PkgFromDb> = statm
+            .query([pkg_name])
+            .into_diagnostic()?
+            .map(|row| row.try_into())
+            .collect::<Vec<PkgFromDb>>()
+            .into_diagnostic()?;
+
+        if pkgs.is_empty() {
+            return Err(miette!("you try to load a pkg that not exist"));
+        }
+
+        let pkg = join_matched_pkgs(pkgs).first().cloned();
+
+        Ok(pkg.unwrap())
+    }
+
     /// remove dependency of a pkg on pkg
-    fn undepand(pkg_name: &str, deps_names: &[&str]) -> miette::Result<()> {
-        todo!()
+    pub fn undepand(&self, pkg_name: &str, deps_names: &[&str]) -> miette::Result<()> {
+        let pkg = self.load(pkg_name)?;
+
+        if !deps_names
+            .iter()
+            .all(|dep| pkg.deps.contains(&dep.to_string()))
+        {
+            return Err(miette!("can't undepand on a pkg that is not in dependency"));
+        };
+
+        for dep in deps_names {
+            self.conn
+                .execute(sql::UNDEPAND, (pkg_name, dep))
+                .into_diagnostic()?;
+        }
+
+        Ok(())
     }
 }
 
@@ -246,20 +293,22 @@ mod test {
         let (db, _file) = make_new_db()?;
         inject_mock(&db)?;
 
-        let pkgs = db.load()?;
+        let pkg0 = Pkg {
+            name: "pkg0".into(),
+            deps: ["pkg1".into(), "pkg2".into()].into(),
+            version: None,
+            linked_paths: [].into(),
+            path: "/path/pkg0".into(),
+            type_name: "type".into(),
+            just_a_dep: false,
+        };
+
+        let pkgs = db.load_all()?;
 
         assert_eq!(
             pkgs,
             [
-                Pkg {
-                    name: "pkg0".into(),
-                    deps: ["pkg1".into(), "pkg2".into()].into(),
-                    version: None,
-                    linked_paths: [].into(),
-                    path: "/path/pkg0".into(),
-                    type_name: "type".into(),
-                    just_a_dep: false
-                },
+                pkg0.clone(),
                 Pkg {
                     name: "pkg1".into(),
                     deps: [].into(),
@@ -281,6 +330,10 @@ mod test {
             ]
         );
 
+        let pkg = db.load("pkg0")?;
+
+        assert_eq!(pkg, pkg0);
+
         Ok(())
     }
 
@@ -301,10 +354,52 @@ mod test {
 
         db.install(input.clone())?;
 
-        let pkgs = db.load()?;
+        let pkgs = db.load_all()?;
 
         assert_eq!(pkgs.len(), 1);
         assert_eq!(pkgs, input);
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_depandncy() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+
+        let pkg0 = db
+            .load_all()?
+            .iter()
+            .find(|pkg| pkg.name == "pkg0")
+            .unwrap()
+            .clone();
+
+        assert_eq!(pkg0.deps, ["pkg1", "pkg2"]);
+
+        db.undepand("pkg0", &["pkg1"])?;
+
+        let pkg0 = db
+            .load_all()?
+            .iter()
+            .find(|pkg| pkg.name == "pkg0")
+            .unwrap()
+            .clone();
+
+        assert_eq!(pkg0.deps, ["pkg2"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn panic_on_undepand_on_not_a_dep() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+        let err = db.undepand("pkg1", &["pkg0"]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("can't undepand on a pkg that is not in dependency"),
+            "unexpected error: {err}"
+        );
 
         Ok(())
     }
