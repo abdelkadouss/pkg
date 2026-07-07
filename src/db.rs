@@ -125,6 +125,12 @@ mod sql {
     pub const DEPAND_ON_PKG: &str = "INSERT INTO dep (pkg, depends_on) VALUES ( ?1, ?2 )";
 
     pub const UNDEPAND: &str = "DELETE FROM dep WHERE pkg = ?1 AND depends_on = ?2";
+
+    pub const UPDATE_JUST_A_DEP_VALUE_FOR_PKG: &str =
+        "UPDATE pkg SET just_a_dep = ?2 WHERE name = ?1";
+
+    pub const UPDATE_PKG_INFO: &str =
+        "UPDATE pkg SET version = ?2, just_a_dep = ?3, path = ?4, type_name = ?5 WHERE name = ?1";
 }
 
 impl Db {
@@ -177,6 +183,7 @@ impl Db {
         &self,
         pkg_name: &str,
     ) -> miette::Result<Vec</*pkg that depand on pkg to remove*/ String>> {
+        // TDOO: remove the pkg that to remove pkg depends_on and marked as just_a_dep
         let dep_stuck = self.follow_dependency(pkg_name)?;
 
         let mut unlink_statm = self
@@ -237,11 +244,41 @@ impl Db {
     }
 
     /// update pkg info in db.
-    pub fn update(
-        &self,
-        pkgs: HashMap</*name*/ String, BridgeNewPkgMetadata>,
-    ) -> miette::Result<()> {
-        todo!()
+    pub fn update(&self, pkgs: HashMap</*name*/ String, Pkg>) -> miette::Result<()> {
+        let mut update_pkg_into_statm = self
+            .conn
+            .prepare_cached(sql::UPDATE_PKG_INFO)
+            .into_diagnostic()?;
+
+        for (pkg_name, pkg) in pkgs {
+            let old_pkg = self.load(&pkg_name)?;
+
+            update_pkg_into_statm
+                .execute((
+                    pkg_name,
+                    pkg.version,
+                    pkg.just_a_dep,
+                    pkg.path.to_string_lossy(),
+                    pkg.type_name,
+                ))
+                .into_diagnostic()?;
+
+            todo!("update and link/unlink paths base on need");
+            todo!("update and depand/undepnad paths base on need");
+        }
+
+        Ok(())
+    }
+
+    pub fn mark_just_a_dep_flag(&self, pkg_name: &str, new_value: bool) -> miette::Result<()> {
+        if !self.exists(pkg_name)? {
+            return Err(miette!("can't update just_a_dep flag for a non exists pkg"));
+        }
+
+        self.conn
+            .execute(sql::UPDATE_JUST_A_DEP_VALUE_FOR_PKG, (pkg_name, new_value))
+            .map(|_| ())
+            .into_diagnostic()
     }
 
     pub fn load_all(&self) -> miette::Result<Vec<Pkg>> {
@@ -492,7 +529,7 @@ mod test {
     }
 
     #[test]
-    fn depand_undepand_link_unlink() -> miette::Result<()> {
+    fn depand_undepand_link_unlink_update_just_a_dep() -> miette::Result<()> {
         let (db, _file) = make_new_db()?;
         inject_mock(&db)?;
 
@@ -501,6 +538,7 @@ mod test {
         db.depand("pkg2", &["pkg1"])?;
         db.undepand("pkg0", &["pkg1"])?;
         db.unlink("pkg1", &["bin1"])?;
+        db.mark_just_a_dep_flag("pkg1", true)?;
         let after = db.load_all()?;
 
         let find = |pkg: &str, vec: &Vec<Pkg>| vec.iter().find(|p| p.name == pkg).unwrap().clone();
@@ -520,11 +558,13 @@ mod test {
         assert!(bpkg2.linked_paths.is_empty());
         assert!(bpkg2.deps.is_empty());
         assert!(bpkg0.deps.contains(&"pkg1".into()));
+        assert!(!bpkg1.just_a_dep);
         assert!(bpkg1.linked_paths.contains(&"bin1".into()));
 
         assert_eq!(fpkg2.linked_paths, [PathBuf::from("new")]);
         assert_eq!(fpkg2.deps, ["pkg1"]);
         assert!(!fpkg0.deps.contains(&"pkg1".into()));
+        assert!(fpkg1.just_a_dep);
         assert!(!fpkg1.linked_paths.contains(&"bin1".into()));
 
         Ok(())
