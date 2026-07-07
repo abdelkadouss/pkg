@@ -36,6 +36,8 @@ impl From<(PkgUserDef, BridgeNewPkgMetadata, PkgType)> for Pkg {
     }
 }
 
+pub type Input = Vec<PkgUserDef>;
+
 /// the represent how to pkg defined in the user inputs
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct PkgUserDef {

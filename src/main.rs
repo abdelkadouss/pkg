@@ -9,6 +9,7 @@ mod pkg;
 mod pkg_type;
 mod process;
 mod utils;
+mod validation;
 
 fn main() -> miette::Result<()> {
     cli::Cli::route()
