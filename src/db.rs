@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+};
 
 use miette::{IntoDiagnostic, miette};
 use rusqlite::{Connection, Row, fallible_iterator::FallibleIterator, params};
@@ -107,11 +110,21 @@ mod sql {
         WHERE name = ?1;
     "#;
 
-    pub const UNDEPAND: &str = "DELETE FROM dep WHERE pkg = ?1 AND depends_on = ?2";
+    pub const GET_PKG_NAME: &str = "SELECT name FROM pkg WHERE name = ?1";
 
     pub const ADD_PKG: &str = "INSERT INTO pkg (name, path, version, type_name, just_a_dep) VALUES ( ?1, ?2, ?3, ?4, ?5 )";
+
     pub const LINK_PKG: &str = "INSERT INTO link (pkg, path_in_pkg) VALUES ( ?1, ?2 )";
+
+    pub const UNLINK_PKG: &str = "DELETE FROM link WHERE pkg = ?1 AND path_in_pkg = ?2";
+
+    pub const REMOVE_FROM_LINK_TABLE: &str = "DELETE FROM link WHERE pkg = ?1";
+
+    pub const REMOVE_PKG: &str = "DELETE FROM pkg WHERE name = ?1";
+
     pub const DEPAND_ON_PKG: &str = "INSERT INTO dep (pkg, depends_on) VALUES ( ?1, ?2 )";
+
+    pub const UNDEPAND: &str = "DELETE FROM dep WHERE pkg = ?1 AND depends_on = ?2";
 }
 
 impl Db {
@@ -162,9 +175,65 @@ impl Db {
     /// remove a pkg and all the pkgs depand on from db.
     pub fn remove_and_pkg_depand_on(
         &self,
-        pkgs_names: &[&str],
+        pkg_name: &str,
     ) -> miette::Result<Vec</*pkg that depand on pkg to remove*/ String>> {
-        todo!()
+        let dep_stuck = self.follow_dependency(pkg_name)?;
+
+        let mut unlink_statm = self
+            .conn
+            .prepare_cached(sql::REMOVE_FROM_LINK_TABLE)
+            .into_diagnostic()?;
+
+        let mut remove_pkg_statm = self
+            .conn
+            .prepare_cached(sql::REMOVE_PKG)
+            .into_diagnostic()?;
+
+        for dep in dep_stuck.iter() {
+            unlink_statm.execute(params![dep]).into_diagnostic()?;
+
+            remove_pkg_statm.execute(params![dep]).into_diagnostic()?;
+        }
+
+        self.conn
+            .execute(sql::REMOVE_PKG, params![pkg_name])
+            .into_diagnostic()?;
+
+        Ok(dep_stuck)
+    }
+
+    pub fn follow_dependency(&self, pkg_name: &str) -> miette::Result<Vec<String>> {
+        let pkg = self.load(pkg_name)?;
+
+        let mut deps_stuck: Vec<String> = vec![];
+
+        let mut follow_path: VecDeque<String> = VecDeque::from([pkg.name.clone()]);
+
+        // FIXME: make this const
+        let mut statm = self
+            .conn
+            .prepare("SELECT pkg FROM dep WHERE depends_on = ?1")
+            .into_diagnostic()?;
+
+        while let Some(dep) = follow_path.pop_front() {
+            let deps_on = statm
+                .query([dep])
+                .into_diagnostic()?
+                .map(|it| it.get(0))
+                .collect::<Vec<String>>()
+                .into_diagnostic()?;
+
+            // FIXME: the dep loop is posibale insha'Allah
+            follow_path.append(&mut deps_on.clone().into());
+
+            for dep in deps_on {
+                if !deps_stuck.contains(&dep) {
+                    deps_stuck.push(dep);
+                }
+            }
+        }
+
+        Ok(deps_stuck)
     }
 
     /// update pkg info in db.
@@ -210,6 +279,10 @@ impl Db {
 
     /// remove dependency of a pkg on pkg
     pub fn undepand(&self, pkg_name: &str, deps_names: &[&str]) -> miette::Result<()> {
+        if !self.exists(pkg_name)? {
+            return Err(miette!("can't remove depandncy for a non exists pkg"));
+        }
+
         let pkg = self.load(pkg_name)?;
 
         if !deps_names
@@ -227,6 +300,81 @@ impl Db {
 
         Ok(())
     }
+
+    /// remove link of path in pkg
+    pub fn unlink(&self, pkg_name: &str, paths: &[&str]) -> miette::Result<()> {
+        if !self.exists(pkg_name)? {
+            return Err(miette!("can't remove link for a non exists pkg"));
+        }
+
+        let pkg = self.load(pkg_name)?;
+
+        if !paths
+            .iter()
+            .all(|path| pkg.linked_paths.contains(&path.to_string().into()))
+        {
+            return Err(miette!(
+                "can't unlink path that is not linked in the first place"
+            ));
+        };
+
+        for path in paths {
+            self.conn
+                .execute(sql::UNLINK_PKG, (pkg_name, path))
+                .into_diagnostic()?;
+        }
+
+        Ok(())
+    }
+
+    /// link pkg path
+    pub fn link(&self, pkg_name: &str, paths: &[&str]) -> miette::Result<()> {
+        if !self.exists(pkg_name)? {
+            return Err(miette!("can't make link for a non exists pkg"));
+        }
+
+        let mut statm = self.conn.prepare(sql::LINK_PKG).into_diagnostic()?;
+
+        for path in paths {
+            statm.execute((pkg_name, path)).into_diagnostic()?;
+        }
+
+        Ok(())
+    }
+
+    /// depand on pkg
+    pub fn depand(&self, pkg_name: &str, deps: &[&str]) -> miette::Result<()> {
+        if !self.exists(pkg_name)? {
+            return Err(miette!("can't make depandncy for a non exists pkg"));
+        }
+
+        let mut statm = self.conn.prepare(sql::DEPAND_ON_PKG).into_diagnostic()?;
+
+        for dep in deps {
+            statm.execute((pkg_name, dep)).into_diagnostic()?;
+        }
+
+        Ok(())
+    }
+
+    /// check if pkg exists
+    pub fn exists(&self, pkg_name: &str) -> miette::Result<bool> {
+        let mut statm = self.conn.prepare(sql::GET_PKG_NAME).into_diagnostic()?;
+
+        if let Some(name) = statm
+            .query([pkg_name])
+            .into_diagnostic()?
+            .map(|row| row.get(0))
+            .collect::<Vec<String>>()
+            .into_diagnostic()?
+            .first()
+            && name == pkg_name
+        {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 fn join_matched_pkgs(pkgs: Vec<PkgFromDb>) -> Vec<Pkg> {
@@ -239,11 +387,15 @@ fn join_matched_pkgs(pkgs: Vec<PkgFromDb>) -> Vec<Pkg> {
             .find(|it| it.1.name == pkg.name)
             .map(|it| it.0)
         {
-            if let Some(path) = pkg.linked_paths {
+            if let Some(path) = pkg.linked_paths
+                && out[index].linked_paths.iter().all(|p| path != *p)
+            {
                 out[index].linked_paths.push(path.into());
             }
 
-            if let Some(dep) = pkg.deps {
+            if let Some(dep) = pkg.deps
+                && out[index].deps.iter().all(|d| dep != *d)
+            {
                 out[index].deps.push(dep);
             }
         } else {
@@ -282,6 +434,8 @@ mod test {
         INSERT INTO dep (pkg, depends_on) VALUES ("pkg0", "pkg2");
         "#,
     ];
+
+    use std::path::PathBuf;
 
     use miette::IntoDiagnostic;
     use tempfile::NamedTempFile;
@@ -333,6 +487,56 @@ mod test {
         let pkg = db.load("pkg0")?;
 
         assert_eq!(pkg, pkg0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn depand_undepand_link_unlink() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+
+        let before = db.load_all()?;
+        db.link("pkg2", &["new"])?;
+        db.depand("pkg2", &["pkg1"])?;
+        db.undepand("pkg0", &["pkg1"])?;
+        db.unlink("pkg1", &["bin1"])?;
+        let after = db.load_all()?;
+
+        let find = |pkg: &str, vec: &Vec<Pkg>| vec.iter().find(|p| p.name == pkg).unwrap().clone();
+
+        let find_before = |pkg| find(pkg, &before);
+
+        let find_after = |pkg| find(pkg, &after);
+
+        let (bpkg0, bpkg1, bpkg2) = (
+            find_before("pkg0"),
+            find_before("pkg1"),
+            find_before("pkg2"),
+        );
+
+        let (fpkg0, fpkg1, fpkg2) = (find_after("pkg0"), find_after("pkg1"), find_after("pkg2"));
+
+        assert!(bpkg2.linked_paths.is_empty());
+        assert!(bpkg2.deps.is_empty());
+        assert!(bpkg0.deps.contains(&"pkg1".into()));
+        assert!(bpkg1.linked_paths.contains(&"bin1".into()));
+
+        assert_eq!(fpkg2.linked_paths, [PathBuf::from("new")]);
+        assert_eq!(fpkg2.deps, ["pkg1"]);
+        assert!(!fpkg0.deps.contains(&"pkg1".into()));
+        assert!(!fpkg1.linked_paths.contains(&"bin1".into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_if_pkg_exist() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+
+        assert!(db.exists("pkg0")?);
+        assert!(!db.exists("not_exists")?);
 
         Ok(())
     }
@@ -399,6 +603,81 @@ mod test {
             err.to_string()
                 .contains("can't undepand on a pkg that is not in dependency"),
             "unexpected error: {err}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn unlink() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+
+        let pkg1 = db.load("pkg1")?;
+
+        let first_val: Vec<PathBuf> = vec!["bin1".into(), "bin2".into(), "bin3".into()];
+
+        assert_eq!(pkg1.linked_paths, first_val);
+
+        db.unlink("pkg1", &["bin1"])?;
+
+        let pkg1 = db.load("pkg1")?;
+
+        let expected_val: Vec<PathBuf> = vec!["bin2".into(), "bin3".into()];
+        assert_eq!(pkg1.linked_paths, expected_val);
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_a_pkg_and_every_thing_deapnds_on() -> miette::Result<()> {
+        let (db, _file) = make_new_db()?;
+        inject_mock(&db)?;
+
+        let pkg_should_be_removed = [
+            Pkg {
+                name: "dep_on_pkg0".into(),
+                path: "/some/where/dep_for_pkg0".into(),
+                version: None,
+                type_name: "".into(),
+                just_a_dep: false,
+                deps: ["pkg0".into()].into(),
+                linked_paths: [].into(), // no links
+            },
+            Pkg {
+                name: "dep_on_pkg0_and_pkg1".into(),
+                path: "/some/where/dep_on_pkg0_and_pkg1".into(),
+                version: None,
+                type_name: "".into(),
+                just_a_dep: false,
+                deps: ["pkg0".into(), "pkg1".into()].into(),
+                linked_paths: [].into(), // no links
+            },
+            Pkg {
+                name: "dep_on_dep_on_pkg0".into(),
+                path: "/some/where/dep_on_dep_on_pkg0".into(),
+                version: None,
+                type_name: "".into(),
+                just_a_dep: false,
+                deps: ["dep_on_pkg0".into()].into(),
+                linked_paths: [].into(), // no links
+            },
+        ];
+
+        db.install(pkg_should_be_removed.into())?;
+
+        let deps = db.remove_and_pkg_depand_on("pkg0")?;
+
+        let pkgs = db.load_all()?;
+
+        assert_eq!(pkgs.len(), 2);
+        assert_eq!(
+            pkgs.iter().map(|p| p.name.clone()).collect::<Vec<String>>(),
+            ["pkg1", "pkg2"]
+        );
+        assert_eq!(
+            deps,
+            ["dep_on_pkg0", "dep_on_pkg0_and_pkg1", "dep_on_dep_on_pkg0"]
         );
 
         Ok(())
