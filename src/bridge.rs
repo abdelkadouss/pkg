@@ -1,6 +1,10 @@
 const DEFAULT_BRIGE_ENTRY_POINT_FINE: &str = "run.lua";
+const LUA_EXTENSION: &str = "lua";
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use miette::{IntoDiagnostic, miette};
 use mlua::{ExternalResult, Lua};
@@ -9,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{pkg::Os, utils::LuaResultExt};
 
 #[derive(Default, Debug)]
-struct BridgeFeatures {
+pub struct BridgeFeatures {
     pkg_type: Vec<String>,
     opts: Vec<String>,
     specify_version: bool,
@@ -18,9 +22,9 @@ struct BridgeFeatures {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum BridgeOutput {
-    New(BridgeNewPkgMetadata),
+    New(Vec<BridgeNewPkgMetadata>),
     Remove(/*name*/ String),
-    Update(Option<BridgeNewPkgMetadata>),
+    Update(Option<Vec<BridgeNewPkgMetadata>>),
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -29,6 +33,25 @@ pub struct BridgeNewPkgMetadata {
     pub pkg_type: Option<String>,
     pub version: Option<String>,
     pub link: Option<Vec<PathBuf>>,
+}
+
+impl mlua::FromLua for BridgeNewPkgMetadata {
+    fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
+        let mlua::Value::Table(data) = value else {
+            return Err(mlua::Error::FromLuaConversionError {
+                from: "brdige insatll function output",
+                to: "new pkg metadata".into(),
+                message: Some("the install call return a wrong output".into()),
+            });
+        };
+
+        Ok(Self {
+            path: data.get("path")?,
+            pkg_type: data.get("pkg_type").unwrap_or_default(),
+            version: data.get("version").unwrap_or_default(),
+            link: data.get("link").unwrap_or_default(),
+        })
+    }
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -51,7 +74,7 @@ pub enum BridgeDep {
 }
 
 #[derive(Debug)]
-struct Bridge {
+pub struct Bridge {
     pub features: BridgeFeatures,
     pub just_a_dep: bool,
     pub os: Option<Os>,
@@ -59,6 +82,12 @@ struct Bridge {
     pub install: mlua::Function,
     pub update: Option<mlua::Function>,
     pub remove: Option<mlua::Function>,
+}
+
+#[derive(Debug)]
+pub struct NamedBridge {
+    pub name: String,
+    pub bridge: Bridge,
 }
 
 impl mlua::FromLua for BridgeDep {
@@ -140,26 +169,34 @@ impl mlua::FromLua for BridgeFeatures {
 }
 
 pub mod default_impl {
-    use mlua::prelude::{Lua, LuaResult};
+    use mlua::prelude::Lua;
 
-    pub fn update(lua: &Lua, name: String) -> LuaResult<()> {
+    use crate::bridge::BridgeNewPkgMetadata;
+
+    pub fn update(lua: &Lua, name: String) -> miette::Result<Option<Vec<BridgeNewPkgMetadata>>> {
         todo!()
     }
 
-    pub fn remove(lua: &Lua, name: String) -> LuaResult<()> {
+    pub fn remove(lua: &Lua, name: String) -> miette::Result<()> {
         todo!()
     }
 }
 
-fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridge>> {
-    let mut out = Vec::<Bridge>::new();
+pub fn load_bridges(engine: &Lua, bridges_path: &Path) -> miette::Result<Vec<NamedBridge>> {
+    let mut out = Vec::<NamedBridge>::new();
 
     let bridge_dir = fs::read_dir(&bridges_path).into_diagnostic()?;
     for entry in bridge_dir {
         let entry = entry.into_diagnostic()?;
 
         // skip hiding entrys
-        if entry.file_name().to_string_lossy().starts_with(".") || !entry.path().is_dir() {
+        if entry.file_name().to_string_lossy().starts_with(".")
+            || !entry.path().is_dir()
+            || entry
+                .path()
+                .extension()
+                .is_none_or(|ex| ex != LUA_EXTENSION)
+        {
             continue;
         }
 
@@ -181,12 +218,13 @@ fn load_bridges(engine: &Lua, bridges_path: PathBuf) -> miette::Result<Vec<Bridg
             )));
         }
 
-        out.push(
-            engine
+        out.push(NamedBridge {
+            name: entry.file_name().to_string_lossy().to_string(),
+            bridge: engine
                 .load(fs::read_to_string(entry_path).into_diagnostic()?)
                 .eval()
                 .into_report()?,
-        );
+        });
     }
 
     Ok(out)

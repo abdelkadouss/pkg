@@ -33,10 +33,10 @@ pub enum CleanMode {
 
 #[derive(Serialize, Deserialize)]
 pub struct SystemConfig {
-    database_path: PathBuf,
-    logs_path: PathBuf,
-    max_thread_number: u8,
-    clean_mode: CleanMode,
+    pub database_path: PathBuf,
+    pub logs_path: PathBuf,
+    pub max_thread_number: u8,
+    pub clean_mode: CleanMode,
 }
 
 #[derive(Serialize, Deserialize)]

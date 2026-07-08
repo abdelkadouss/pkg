@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use miette::{IntoDiagnostic, miette};
@@ -134,8 +134,8 @@ mod sql {
 }
 
 impl Db {
-    pub fn new(path: PathBuf) -> miette::Result<Self> {
-        let conn = Connection::open(&path).into_diagnostic()?;
+    pub fn new(path: &Path) -> miette::Result<Self> {
+        let conn = Connection::open(path).into_diagnostic()?;
 
         conn.execute(sql::CONFIG_DB, []).into_diagnostic()?;
 
@@ -143,7 +143,10 @@ impl Db {
         conn.execute(sql::MAKE_LINK_TABLE, []).into_diagnostic()?;
         conn.execute(sql::MAKE_DEP_TABLE, []).into_diagnostic()?;
 
-        Ok(Self { path, conn })
+        Ok(Self {
+            path: path.to_path_buf(),
+            conn,
+        })
     }
 
     /// insert new pkg to db.
@@ -725,7 +728,7 @@ mod test {
 
     fn make_new_db() -> miette::Result<(Db, NamedTempFile)> {
         let file = NamedTempFile::new().into_diagnostic()?;
-        let db = Db::new(file.path().to_path_buf())?;
+        let db = Db::new(file.path())?;
 
         Ok((db, file))
     }

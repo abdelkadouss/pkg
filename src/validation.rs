@@ -71,7 +71,7 @@ pub fn try_ensure_no_dep_loop(input: &Input) -> miette::Result<Option<Vec<String
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::pkg::{PkgOption, PkgUserDef};
+    use crate::pkg::{PkgOption, PkgOptionMap, PkgUserDef};
 
     #[test]
     fn input_validations_positive() -> miette::Result<()> {
@@ -79,10 +79,10 @@ mod test {
             PkgUserDef {
                 name: "pkg1".into(),
                 input: "pkg1".into(),
-                opts: vec![PkgOption::Bool {
+                opts: PkgOptionMap(vec![PkgOption::Bool {
                     name: "are-u-okey".into(),
                     value: true,
-                }]
+                }])
                 .into(),
                 deps: vec!["pkg2".into()].into(),
                 version: None,
@@ -92,10 +92,10 @@ mod test {
             PkgUserDef {
                 name: "pkg2".into(),
                 input: "pkg2".into(),
-                opts: vec![PkgOption::Bool {
+                opts: PkgOptionMap(vec![PkgOption::Bool {
                     name: "are-u-okey".into(),
                     value: true,
-                }]
+                }])
                 .into(),
                 deps: vec![].into(),
                 version: None,
@@ -121,10 +121,10 @@ mod test {
             PkgUserDef {
                 name: "pkg1".into(),
                 input: "pkg1".into(),
-                opts: vec![PkgOption::Bool {
+                opts: PkgOptionMap(vec![PkgOption::Bool {
                     name: "are-u-okey".into(),
                     value: true,
-                }]
+                }])
                 .into(),
                 deps: vec!["pkg2".into()].into(),
                 version: None,
@@ -134,7 +134,7 @@ mod test {
             PkgUserDef {
                 name: "pkg1".into(),
                 input: "what_ever".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec![].into(),
                 version: None,
                 just_a_dep: None,
@@ -143,7 +143,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man".into(),
                 input: "what_ever".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["not_exists".into()].into(),
                 version: None,
                 just_a_dep: None,
@@ -152,10 +152,10 @@ mod test {
             PkgUserDef {
                 name: "pkg2".into(),
                 input: "pkg2".into(),
-                opts: vec![PkgOption::Bool {
+                opts: PkgOptionMap(vec![PkgOption::Bool {
                     name: "are-u-okey".into(),
                     value: true,
-                }]
+                }])
                 .into(),
                 deps: vec![].into(),
                 version: None,
@@ -167,7 +167,7 @@ mod test {
         let depand_on_my_self = vec![PkgUserDef {
             name: "bad_man".into(),
             input: "bad_input".into(),
-            opts: vec![].into(),
+            opts: PkgOptionMap::default().into(),
             deps: vec!["bad_man".into()].into(),
             version: None,
             just_a_dep: None,
@@ -178,7 +178,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man1".into(),
                 input: "bad_input1".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["bad_man2".into()].into(),
                 version: None,
                 just_a_dep: None,
@@ -187,7 +187,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man2".into(),
                 input: "bad_input2".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["bad_man1".into()].into(),
                 version: None,
                 just_a_dep: None,
@@ -199,7 +199,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man1".into(),
                 input: "bad_input1".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["bad_man3".into()].into(),
                 version: None,
                 just_a_dep: None,
@@ -208,7 +208,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man2".into(),
                 input: "bad_input2".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["bad_man1".into()].into(),
                 version: None,
                 just_a_dep: None,
@@ -217,7 +217,7 @@ mod test {
             PkgUserDef {
                 name: "bad_man3".into(),
                 input: "bad_input3".into(),
-                opts: vec![].into(),
+                opts: PkgOptionMap::default().into(),
                 deps: vec!["bad_man2".into()].into(),
                 version: None,
                 just_a_dep: None,

@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use miette::{IntoDiagnostic, miette};
 use mlua::{ExternalResult, FromLua, Lua};
@@ -186,10 +189,10 @@ impl FromLua for PkgHooks {
 }
 
 impl PkgType {
-    fn load(
+    pub fn load(
         engine: &Lua,
-        pkg_types_def_path: &PathBuf,
-        default_out: PathBuf,
+        pkg_types_def_path: &Path,
+        default_out: &Path,
     ) -> miette::Result<Vec<PkgType>> {
         let mut out: Vec<PkgType> = vec![];
 
@@ -216,7 +219,7 @@ impl PkgType {
                     .into_string()
                     .map_err(|e| miette!(format!("{:?}", e)))?,
                 lua_def,
-                default_out.clone(),
+                default_out.to_path_buf().clone(),
             ));
         }
 
@@ -271,7 +274,7 @@ mod test {
         let lua = Lua::new();
 
         let pkg_type: PkgType =
-            PkgType::load(&lua, &dir_path, PathBuf::from("/opt/pkg"))?[0].clone();
+            PkgType::load(&lua, &dir_path, &PathBuf::from("/opt/pkg"))?[0].clone();
 
         assert_eq!(pkg_type.link, PkgLinkOptions::Dont);
         assert_eq!(

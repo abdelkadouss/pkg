@@ -4,10 +4,20 @@ const UNPRIVILEGED_GROUP: &str = "nogroup";
 use clap::{ColorChoice, Parser, Subcommand};
 
 use miette::{IntoDiagnostic, miette};
+use mlua::Lua;
 use nix::unistd::{ForkResult, Gid, Group, Uid, User, fork, setgid, setuid};
 use std::{io::BufReader, os::unix::net::UnixStream};
 
-use crate::process::{ChildBridgeMessage, reserve_msg, send_msg};
+use crate::{
+    bridge::{self, BridgeNewPkgMetadata, BridgeOutput, default_impl},
+    config::Config,
+    db::Db,
+    pkg::{self, PkgUserDef},
+    pkg_type,
+    process::{ChildBridgeMessage, reserve_msg, send_msg},
+    utils::LuaResultExt,
+    validation,
+};
 
 mod clean;
 mod info;
@@ -69,6 +79,9 @@ pub enum Commands {
     /// Clean cache and temporary files
     Clean,
 
+    /// Test a bridge with verbose loging
+    Test,
+
     #[cfg(feature = "cli_complation")]
     /// Generate shell completion scripts for your clap::Command
     #[command(alias = "compl")]
@@ -108,7 +121,104 @@ impl Cli {
                                 "the bridge runner worker still was root privileges, fiald to down grade."
                             ));
                         }
+
                         // TODO: execute brdiges
+                        let lua = Lua::new();
+                        let config = Config::load(&lua)?;
+                        let db = Db::new(&config.system.database_path)?;
+
+                        let bridges = bridge::load_bridges(&lua, &config.paths.bridges)?;
+                        let input = pkg::PkgUserDef::load(&lua, &config.paths.inputs)?.0;
+                        let pkg_types = pkg_type::PkgType::load(
+                            &lua,
+                            &config.paths.pkg_types_definition,
+                            &config.paths.default_out,
+                        )?;
+
+                        let all_inputs = input
+                            .into_iter()
+                            .map(|(_, pkgs)| pkgs.0)
+                            .collect::<Vec<Vec<PkgUserDef>>>()
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<PkgUserDef>>();
+
+                        validation::ensure_no_duplication(&all_inputs)
+                            .ok_or(todo!("return err"))
+                            .into_diagnostic()?;
+                        validation::ensure_all_depand_on_defined_pkg(&all_inputs)
+                            .ok_or(todo!("return err"))
+                            .into_diagnostic()?;
+                        validation::try_ensure_no_dep_loop(&all_inputs)?;
+
+                        // TODO: ensure the user uses brdige that exists.
+
+                        // TODO: do even more validation like ensure that pkg def uses the defined valid opts in the pkg type def.
+
+                        // TODO: do that thread managment
+                        // let threads_stuck = vec![];
+
+                        for node in input {
+                            let bridge =
+                                bridges.iter().find(|brdige| brdige.name == node.0).unwrap();
+
+                            if let Commands::Update { packages } = command {
+                                let (_, _, mut to_update) =
+                                    slit_pkg_base_on_state(all_inputs, &db)?;
+
+                                if let Some(packages) = packages {
+                                    to_update = to_update
+                                        .into_iter()
+                                        .filter(|pkg| packages.contains(&pkg.name))
+                                        .collect::<Vec<PkgUserDef>>();
+                                }
+
+                                for pkg in to_update {
+                                    let pkgs_with_new_data =
+                                        if let Some(method) = bridge.bridge.update {
+                                            method
+                                                .call::<Option<Vec<BridgeNewPkgMetadata>>>(())
+                                                .into_report()?
+                                        } else {
+                                            default_impl::update(&lua, pkg.name)?
+                                        };
+
+                                    send_msg(
+                                        &mut child_socket,
+                                        BridgeOutput::Update(pkgs_with_new_data),
+                                    )?;
+                                }
+
+                                continue;
+                            }
+
+                            let (mut to_install, to_remove, mut to_update) =
+                                slit_pkg_base_on_state(all_inputs, &db)?;
+
+                            if matches!(command, Commands::Rebuild) {
+                                to_install.append(&mut to_update);
+                            }
+
+                            for pkg in to_install {
+                                let new_pkgs = bridge
+                                    .bridge
+                                    .install
+                                    .call::<Vec<BridgeNewPkgMetadata>>(())
+                                    .into_report()?;
+
+                                send_msg(&mut child_socket, BridgeOutput::New(new_pkgs))?;
+                            }
+
+                            for pkg in to_remove {
+                                if let Some(method) = bridge.bridge.remove {
+                                    method.call::<()>(()).into_report()?;
+                                } else {
+                                    default_impl::remove(&lua, pkg.name)?;
+                                }
+
+                                send_msg(&mut child_socket, BridgeOutput::Remove(pkg.name))?;
+                            }
+                        }
                     }
                     ForkResult::Parent { child } => {
                         drop(child_socket);
@@ -210,6 +320,13 @@ fn make_reader_and_writer(
     let writer = stream;
     let reader = BufReader::new(socket_copy);
     Ok((reader, writer))
+}
+
+fn slit_pkg_base_on_state(
+    pkgs: Vec<PkgUserDef>,
+    db: &Db,
+) -> miette::Result<(Vec<PkgUserDef>, Vec<PkgUserDef>, Vec<PkgUserDef>)> {
+    todo!()
 }
 
 #[cfg(test)]
