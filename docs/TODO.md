@@ -1,0 +1,8 @@
+- [ ] replace kdl with lua.
+- [ ] multi thread support.
+- [ ] pkg metadata support stuff like platform, deps, priorty...
+- [ ] multi bins linking in single pkg.
+- [ ] abalti to write inline costom install steps for some pkg.
+- [ ] abalti to define a ***pkg type***.
+- [ ] pkg verifcatioin support (sha256, gpg signiter...).
+- [ ] pkg number in installtoin control per pkg type.

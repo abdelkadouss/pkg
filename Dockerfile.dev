@@ -3,6 +3,7 @@ FROM rust:1.89-bullseye
 
 # Install pkgx for all the dev tools
 RUN cargo install pkgx
+RUN rustup component add clippy
 
 # Set work dir
 WORKDIR /app
