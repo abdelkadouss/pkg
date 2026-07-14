@@ -1,4 +1,4 @@
-const MESSAGE_SEPARATOR: &'static [u8; 1] = b"\n";
+const MESSAGE_SEPARATOR: &[u8; 1] = b"\n";
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -8,11 +8,14 @@ use std::{
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
 
-use crate::bridge::BridgeOutput;
+use crate::{bridge::BridgeOutput, pkg::PkgUserDef};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub enum ChildBridgeMessage {
-    Done(BridgeOutput),
+    Done {
+        user_input: PkgUserDef,
+        output: BridgeOutput,
+    },
     HightPrivApiReq(HightPrivApiCmd),
     ReturnErr(String), // NOTE: u may wanna add `level: u8`, look at the error
                        // function in lua.

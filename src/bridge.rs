@@ -1,5 +1,5 @@
-const DEFAULT_BRIGE_ENTRY_POINT_FINE: &str = "run.lua";
-const LUA_EXTENSION: &str = "lua";
+const DEFAULT_BRIGE_ENTRY_POINT_FINE: &str = "run";
+pub const LUA_EXTENSION: &str = "lua";
 
 use std::{
     fs,
@@ -14,10 +14,10 @@ use crate::{pkg::Os, utils::LuaResultExt};
 
 #[derive(Default, Debug)]
 pub struct BridgeFeatures {
-    pkg_type: Vec<String>,
-    opts: Vec<String>,
-    specify_version: bool,
-    hooks: BridgeHook,
+    pub pkg_type: Vec<String>,
+    pub opts: Vec<String>,
+    pub specify_version: bool,
+    pub hooks: BridgeHook,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -55,16 +55,16 @@ impl mlua::FromLua for BridgeNewPkgMetadata {
 }
 
 #[derive(Default, Debug, PartialEq)]
-struct BridgeHook {
-    after: ActionToggles,
-    before: ActionToggles,
+pub struct BridgeHook {
+    pub after: ActionToggles,
+    pub before: ActionToggles,
 }
 
 #[derive(Default, Debug, PartialEq)]
-struct ActionToggles {
-    install: bool,
-    remove: bool,
-    update: bool,
+pub struct ActionToggles {
+    pub install: bool,
+    pub remove: bool,
+    pub update: bool,
 }
 
 #[derive(Debug)]
@@ -173,11 +173,11 @@ pub mod default_impl {
 
     use crate::bridge::BridgeNewPkgMetadata;
 
-    pub fn update(lua: &Lua, name: String) -> miette::Result<Option<Vec<BridgeNewPkgMetadata>>> {
+    pub fn update(lua: &Lua, name: &String) -> miette::Result<Option<Vec<BridgeNewPkgMetadata>>> {
         todo!()
     }
 
-    pub fn remove(lua: &Lua, name: String) -> miette::Result<()> {
+    pub fn remove(lua: &Lua, name: &String) -> miette::Result<()> {
         todo!()
     }
 }
@@ -185,20 +185,9 @@ pub mod default_impl {
 pub fn load_bridges(engine: &Lua, bridges_path: &Path) -> miette::Result<Vec<NamedBridge>> {
     let mut out = Vec::<NamedBridge>::new();
 
-    let bridge_dir = fs::read_dir(&bridges_path).into_diagnostic()?;
+    let bridge_dir = fs::read_dir(bridges_path).into_diagnostic()?;
     for entry in bridge_dir {
         let entry = entry.into_diagnostic()?;
-
-        // skip hiding entrys
-        if entry.file_name().to_string_lossy().starts_with(".")
-            || !entry.path().is_dir()
-            || entry
-                .path()
-                .extension()
-                .is_none_or(|ex| ex != LUA_EXTENSION)
-        {
-            continue;
-        }
 
         let entry_path = if entry.path().is_symlink() {
             fs::read_link(entry.path()).into_diagnostic()?
@@ -206,9 +195,16 @@ pub fn load_bridges(engine: &Lua, bridges_path: &Path) -> miette::Result<Vec<Nam
             entry.path().to_path_buf()
         };
 
-        let brige_entry_point_path = entry_path.join(DEFAULT_BRIGE_ENTRY_POINT_FINE);
+        // skip hiding entrys
+        if entry.file_name().to_string_lossy().starts_with(".") || !entry_path.is_dir() {
+            continue;
+        }
 
-        if !brige_entry_point_path.exists() {
+        let brige_entry_point_path = entry_path
+            .join(DEFAULT_BRIGE_ENTRY_POINT_FINE)
+            .with_extension(LUA_EXTENSION);
+
+        if !brige_entry_point_path.try_exists().into_diagnostic()? {
             return Err(miette!(format!(
                 "bridge {} don't have an entry point",
                 entry
@@ -221,7 +217,7 @@ pub fn load_bridges(engine: &Lua, bridges_path: &Path) -> miette::Result<Vec<Nam
         out.push(NamedBridge {
             name: entry.file_name().to_string_lossy().to_string(),
             bridge: engine
-                .load(fs::read_to_string(entry_path).into_diagnostic()?)
+                .load(fs::read_to_string(brige_entry_point_path).into_diagnostic()?)
                 .eval()
                 .into_report()?,
         });

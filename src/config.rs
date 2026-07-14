@@ -49,11 +49,18 @@ impl Config {
     pub fn load(engine: &Lua) -> miette::Result<Self> {
         let config_path = Self::path()?;
 
-        if !config_path.exists() {
-            return Err(miette!("config file not exists!"));
-        }
+        match config_path.try_exists() {
+            Ok(exists) => {
+                if !exists {
+                    return Err(miette!("config file not exists!"));
+                }
+            }
+            Err(err) => {
+                return Err(miette!("fialed to check if config file exists.\n\t{err}",));
+            }
+        };
 
-        let config: Config = engine
+        let mut config: Config = engine
             .from_value(
                 engine
                     .load(fs::read_to_string(&config_path).into_diagnostic()?)
@@ -62,6 +69,20 @@ impl Config {
             )
             .map_err(|e| miette!("fiald read lua config: {e}"))?;
 
+        // get the absolute paths
+        config.paths.link = config.paths.link.extand_path()?;
+        config.paths.default_out = config.paths.default_out.extand_path()?;
+        config.paths.inputs = config.paths.inputs.extand_path()?;
+        config.paths.bridges = config.paths.bridges.extand_path()?;
+        config.paths.pkg_types_definition = config.paths.pkg_types_definition.extand_path()?;
+
+        fs::create_dir_all(&config.paths.link).unwrap();
+        fs::create_dir_all(&config.paths.default_out).into_diagnostic()?;
+        fs::create_dir_all(&config.system.logs_path).into_diagnostic()?;
+        if let Some(parent) = &config.system.database_path.parent() {
+            fs::create_dir_all(parent).into_diagnostic()?;
+        }
+
         Ok(config)
     }
 
@@ -69,6 +90,16 @@ impl Config {
         #[cfg(not(test))]
         let config_path = PathBuf::from(
             env::var(UNIX_DEFAULT_CONFIG_DIR_ENV_VAR_INDICATOR_NAME)
+                .map(|dir_str| {
+                    format!(
+                        "{}/{}",
+                        dir_str,
+                        PathBuf::from(DEFAULT_CONFIG_DIR_PATH)
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                    )
+                })
                 .unwrap_or(DEFAULT_CONFIG_DIR_PATH.to_string()),
         )
         .join(DEFAULT_CONFIG_FILE_NAME)
@@ -95,7 +126,10 @@ mod test {
         let lua = Lua::new();
         let config = Config::load(&lua)?;
 
-        assert_eq!(config.paths.inputs, PathBuf::from("~/.config/pkg"));
+        assert_eq!(
+            config.paths.inputs,
+            PathBuf::from("~/.config/pkg").extand_path()?
+        );
         assert_eq!(config.system.max_thread_number, 10);
         assert_eq!(config.system.clean_mode, CleanMode::Soft);
 

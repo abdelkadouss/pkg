@@ -7,7 +7,11 @@ use miette::IntoDiagnostic;
 use mlua::{ExternalResult, Lua, ObjectLike};
 use serde::{Deserialize, Serialize};
 
-use crate::{bridge::BridgeNewPkgMetadata, pkg_type::PkgType, utils::LuaResultExt};
+use crate::{
+    bridge::{BridgeNewPkgMetadata, LUA_EXTENSION},
+    pkg_type::PkgType,
+    utils::LuaResultExt,
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Pkg {
@@ -18,6 +22,37 @@ pub struct Pkg {
     pub just_a_dep: bool,
     pub deps: Vec<String>,
     pub linked_paths: Vec<PathBuf>,
+}
+
+impl Pkg {
+    pub fn build(
+        user_def: /*how user define the pkg in inputs*/ &PkgUserDef,
+        new_pkg: /*the bridge output*/ &BridgeNewPkgMetadata,
+        pkg_type: /*the user define of the pkg type*/ &PkgType,
+    ) -> miette::Result<Pkg> {
+        Ok(Self {
+            name: user_def.name.clone(),
+            path: new_pkg.path.clone(),
+            version: new_pkg.version.clone(),
+            type_name: new_pkg.pkg_type.clone().unwrap_or(pkg_type.name.clone()),
+            just_a_dep: user_def
+                .just_a_dep
+                .clone()
+                .unwrap_or(pkg_type.just_a_dep.clone()),
+            deps: user_def
+                .deps
+                .as_ref()
+                .map(|it| it.clone())
+                .unwrap_or_default()
+                .clone(),
+            linked_paths: new_pkg
+                .link
+                .as_ref()
+                .map(|it| it.clone())
+                .unwrap_or_default()
+                .clone(),
+        })
+    }
 }
 
 impl From<(PkgUserDef, BridgeNewPkgMetadata, PkgType)> for Pkg {
@@ -43,7 +78,7 @@ impl From<(PkgUserDef, BridgeNewPkgMetadata, PkgType)> for Pkg {
 pub type Input = Vec<PkgUserDef>;
 
 /// the represent how to pkg defined in the user inputs
-#[derive(Default, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct PkgUserDef {
     pub name: String,
     pub input: String,
@@ -52,6 +87,24 @@ pub struct PkgUserDef {
     pub version: Option<String>,
     pub just_a_dep: Option<bool>,
     pub os: Option<Os>,
+}
+
+impl From<Pkg> for PkgUserDef {
+    fn from(value: Pkg) -> Self {
+        Self {
+            name: value.name.clone(),
+            input: value.name,
+            opts: None,
+            deps: if value.deps.is_empty() {
+                None
+            } else {
+                Some(value.deps)
+            },
+            version: value.version,
+            just_a_dep: Some(value.just_a_dep),
+            os: None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -98,7 +151,7 @@ impl mlua::FromLua for PkgMap {
             })
             .collect::<mlua::Result<Vec<PkgUserDef>>>();
 
-        if let Ok(mut pkgs) = pkgs {
+        if let Ok(pkgs) = pkgs {
             Ok(Self(pkgs))
         } else {
             Err(pkgs.unwrap_err())
@@ -139,27 +192,44 @@ impl mlua::FromLua for BridgeMap {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub enum Os {
     Kernal(String),
     Name(String),
     Full { kernal: String, name: String },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub enum PkgOption {
     String { name: String, value: String },
     Num { name: String, value: f64 },
     Bool { name: String, value: bool },
-    Function { name: String, value: mlua::Function },
+    // Function { name: String, value: mlua::Function },
     Nil { name: String },
 }
 
-#[derive(Default, Debug, PartialEq)]
+impl mlua::IntoLuaMulti for PkgOptionMap {
+    fn into_lua_multi(self, lua: &Lua) -> mlua::Result<mlua::MultiValue> {
+        let table = lua.create_table()?;
+        for opt in self.0 {
+            match opt {
+                PkgOption::String { name, value } => table.set(name, value)?,
+                PkgOption::Num { name, value } => table.set(name, value)?,
+                PkgOption::Bool { name, value } => table.set(name, value)?,
+                // PkgOption::Function { name, value } => table.set(name, value)?,
+                PkgOption::Nil { name } => table.set(name, mlua::Nil)?,
+            }
+        }
+
+        Ok(table.into_lua_multi(lua)?)
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct PkgOptionMap(pub Vec<PkgOption>);
 
 impl mlua::FromLua for PkgOptionMap {
-    fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
+    fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
                 from: value.type_name(),
@@ -184,7 +254,7 @@ impl mlua::FromLua for PkgOptionMap {
                         name,
                         value: value.to_string_lossy(),
                     }),
-                    mlua::Value::Function(value) => Ok(PkgOption::Function { name, value }),
+                    // mlua::Value::Function(value) => Ok(PkgOption::Function { name, value }),
                     _ => Err(mlua::Error::FromLuaConversionError {
                         from: value.type_name(),
                         to: "pkg option".into(),
@@ -231,6 +301,17 @@ impl PkgUserDef {
         for input in fs::read_dir(input_path).into_diagnostic()? {
             let input = input.into_diagnostic()?;
 
+            if input
+                .path()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .starts_with(".")
+                || input.path().extension().unwrap_or_default() != LUA_EXTENSION
+            {
+                continue;
+            }
+
             if input.path().is_file() {
                 let mut brdiges: BridgeMap = engine
                     .load(fs::read_to_string(input.path()).into_diagnostic()?)
@@ -268,12 +349,14 @@ fn load_pkg_user_def() -> miette::Result<()> {
 
     use std::io::Write;
 
-    use tempfile::{NamedTempFile, tempdir};
+    use tempfile::tempdir;
 
     let lua = Lua::new();
     let inputs_dir = tempdir().into_diagnostic()?;
 
-    let mut input1 = NamedTempFile::new_in(&inputs_dir).into_diagnostic()?;
+    let mut input1 =
+        fs::File::create_new(inputs_dir.path().join(format!("input1.{LUA_EXTENSION}")))
+            .into_diagnostic()?;
     input1.write(INPUT_ONE_VALUE.as_bytes()).into_diagnostic()?;
 
     let pkgs = PkgUserDef::load(&lua, inputs_dir.path())?.0;

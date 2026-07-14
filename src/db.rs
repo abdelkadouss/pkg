@@ -6,7 +6,7 @@ use std::{
 use miette::{IntoDiagnostic, miette};
 use rusqlite::{Connection, Row, fallible_iterator::FallibleIterator, params};
 
-use crate::{bridge::BridgeNewPkgMetadata, pkg::Pkg};
+use crate::pkg::Pkg;
 
 #[derive(Debug)]
 pub struct PkgFromDb {
